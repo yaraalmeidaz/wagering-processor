@@ -77,10 +77,32 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test:integration
 
-  # Ainda sem os 3 processos exigidos pela invariante 9 do AGENTS.md.
+  # Testes com 3 ou mais processos Bun reais (invariante 9 do AGENTS.md), contra PostgreSQL real.
   concurrency:
     needs: integration
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wagering
+          POSTGRES_USER: wagering
+          # Container efêmero do runner: autenticação trust, sem senha versionada (CLAUDE.md regra 5).
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wagering -d wagering"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: wagering
+      POSTGRES_USER: wagering
+      # Ignorada pela autenticação trust; existe porque o mikro-orm.config.ts exige a variável.
+      POSTGRES_PASSWORD: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
