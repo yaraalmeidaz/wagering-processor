@@ -6,7 +6,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/*.md"]
+    "includes": ["**", "!**/*.md", "!test/guards/fixtures"]
   },
   "formatter": {
     "enabled": true,
