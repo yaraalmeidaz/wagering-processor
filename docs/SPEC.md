@@ -471,7 +471,12 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
       processed_at timestamptz,
       UNIQUE (provider_id, external_transaction_id),
       CHECK (kind NOT IN ('REFUND','ROLLBACK') OR reference_external_transaction_id IS NOT NULL),
-      CHECK (status <> 'PROCESSED' OR resulting_balance IS NOT NULL)
+      CHECK (status <> 'PROCESSED' OR resulting_balance IS NOT NULL),
+      -- failure_code só em REJECTED (RN-40), e toda REJECTED tem failure_code (RN-19).
+      CONSTRAINT ck_wager_failure_code_only_rejected
+        CHECK (status = 'REJECTED' OR failure_code IS NULL),
+      CONSTRAINT ck_wager_rejected_requires_failure_code
+        CHECK (status <> 'REJECTED' OR failure_code IS NOT NULL)
     );
 
     CREATE UNIQUE INDEX uq_wager_single_processed_reversal
@@ -549,6 +554,21 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
     CREATE TRIGGER trg_wager_terminal_status
       BEFORE UPDATE OF status ON wager_transactions
       FOR EACH ROW EXECUTE FUNCTION forbid_terminal_status_change();
+
+    -- Snapshot imutável (RN-20): resulting_balance de PROCESSED ou REJECTED não muda,
+    -- nem com o mesmo valor, porque o trigger dispara sempre que a coluna está no SET.
+    CREATE FUNCTION forbid_snapshot_change() RETURNS trigger AS $$
+    BEGIN
+      IF OLD.status IN ('PROCESSED','REJECTED') THEN
+        RAISE EXCEPTION 'resulting_balance de transação PROCESSED ou REJECTED é imutável';
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER trg_wager_snapshot_immutable
+      BEFORE UPDATE OF resulting_balance ON wager_transactions
+      FOR EACH ROW EXECUTE FUNCTION forbid_snapshot_change();
 
 ==========================================================================
 13. CONTRATOS HTTP
