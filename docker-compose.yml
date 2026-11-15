@@ -1,0 +1,42 @@
+name: wagering-processor
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wagering}
+      POSTGRES_USER: ${POSTGRES_USER:-wagering}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env (veja .env.example)}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  localstack:
+    image: localstack/localstack:2026.10.7
+    environment:
+      SERVICES: sqs
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?defina LOCALSTACK_AUTH_TOKEN no .env (veja .env.example)}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+    ports:
+      - "127.0.0.1:${LOCALSTACK_PORT:-4566}:4566"
+    volumes:
+      - ./scripts/localstack/create-queues.sh:/etc/localstack/init/ready.d/create-queues.sh:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'q=$$(awslocal sqs list-queues 2>/dev/null) && printf ''%s'' "$$q" | grep -qF wager-transactions-dlq.fifo && printf ''%s'' "$$q" | grep -qF wager-transactions.fifo && printf ''%s'' "$$q" | grep -qF wager-events.fifo',
+        ]
+      interval: 5s
+      timeout: 15s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  postgres-data:
