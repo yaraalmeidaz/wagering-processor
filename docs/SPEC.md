@@ -192,6 +192,7 @@ HTTP e SQS executam o MESMO caso de uso. Não há caminho paralelo.
 
 5.5 Slow-path: trava a wallet e repete a busca sob o lock.
     SELECT ... FROM wallets WHERE id = $1 FOR UPDATE;
+    O lock de linha da wallet é mantido até o COMMIT ou ROLLBACK da transação.
     Não existe: 404 WALLET_NOT_FOUND na API, sem gravar nada. Na fila: sem ack e sem gravar (RN-39).
     Depois do lock, a busca idempotente é repetida:
     - Encontrado, mesma chave, mesmo hash, mesma (provider, external): replay (RN-20). Não modifica nada.
@@ -234,7 +235,10 @@ HTTP e SQS executam o MESMO caso de uso. Não há caminho paralelo.
     A cláusula kind IN (...) impede que um WIN com referência ocupe o slot de
     reversão. A chave sem kind impede REFUND + ROLLBACK no mesmo BET.
 
-6.3 Se a trava disparar em 23505, aplicar o fluxo da seção 5.9.
+6.3 Se a transição para PROCESSED disparar esta trava (23505), a transação vira
+    REJECTED com REFERENCE_ALREADY_REVERSED (RN-16), em transação nova, pelo caso
+    de uso da seção 5, sob lock da wallet, sem retry. WagerTransactionRejected é
+    publicado (RN-27).
 
 ==========================================================================
 7. TRANSAÇÕES DE VALOR ZERO (free spins)
@@ -258,6 +262,7 @@ Regra: RN-10. Implementação: Money.isZero() é válido; Wallet não altera sal
 8.4 Limite: 12 tentativas OU TTL de 24 h contadas a partir de created_at, o que vier primeiro (RN-12). Justificar no
     ARCHITECTURE.md.
 8.5 Esgotado: REJECTED com REFERENCE_NOT_FOUND, e WagerTransactionRejected publicado.
+    A transição para REJECTED com REFERENCE_NOT_FOUND é feita pelo caso de uso da seção 5, sob lock da wallet, como o resolvedor da seção 8.2.
 
 ==========================================================================
 9. ERROS, FAILURE CODES E HTTP
@@ -344,24 +349,67 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
     data usa MoneyProps (string decimal), nunca a instância Money.
     Eventos de wallet incluem walletVersion para ordenação no consumidor.
 
-11.3 Publisher (N instâncias concorrentes). Justificativa e teste de ordem: ADR-0006.
-    Passo 1, fora de transação: candidatos são os agregados com pendentes.
-      SELECT aggregate_id FROM outbox_messages
-      WHERE published_at IS NULL
-      GROUP BY aggregate_id
-      ORDER BY MIN(occurred_at)
+11.3 Publisher por agregado (N instâncias concorrentes). Justificativa e teste de ordem: ADR-0006.
+    Agregado: aggregate_id é o walletId da carteira afetada pelo evento, em
+    todos os eventos da seção 11.1. Assim, o agregado travado pelo publisher é
+    o mesmo MessageGroupId da seção 10.1, e a ordem fica garantida por carteira
+    (decisão 13). O evento só existe no outbox depois do commit do efeito
+    (RN-30).
+    Ordem dos eventos: a coluna seq (bigserial, seção 12) define a ordem, sem
+    desempate por occurred_at ou id. A ordem dentro da carteira vem do lock de
+    linha da wallet (RN-31, seção 5.5): como o lock dura até o COMMIT, as
+    transações de uma mesma carteira são serializadas, e o seq cresce na ordem
+    de commit dentro da carteira.
+    Passo 1, fora de transação: candidatos são os agregados cujo pendente mais
+    antigo já venceu.
+      SELECT aggregate_id
+      FROM (
+        SELECT DISTINCT ON (aggregate_id) aggregate_id, seq, next_attempt_at
+        FROM outbox_messages
+        WHERE published_at IS NULL
+        ORDER BY aggregate_id, seq
+      ) AS head
+      WHERE head.next_attempt_at <= now()
+      ORDER BY head.seq
       LIMIT 100;
-    Passo 2, por agregado, em transação curta:
-      a) SELECT pg_try_advisory_xact_lock(hashtext(aggregate_id::text)); se retornar falso, outro publisher tem o agregado: pular.
-      b) SELECT ... FROM outbox_messages
+      O filtro de next_attempt_at vale só para o pendente mais antigo de cada
+      agregado, depois de escolhido. Filtrar antes de escolher publicaria um
+      evento posterior antes de um anterior em backoff. Um agregado com o mais
+      antigo em backoff fica fora do lote e não ocupa vaga no LIMIT.
+    Passo 2, por agregado ($1 = aggregate_id; $2 = id lido no passo b), numa
+    transação que continua aberta durante a chamada ao SQS (passo c): o advisory
+    lock e o FOR UPDATE só são liberados no COMMIT do passo d ou e.
+      a) SELECT pg_try_advisory_xact_lock(hashtext($1::text));
+         Falso: outro publisher tem o agregado; pular. O cast ::text é
+         obrigatório, porque hashtext(uuid) não existe. hashtext devolve int4:
+         duas carteiras podem colidir, e o efeito é só pular um agregado
+         neste ciclo, sem risco para a ordem.
+      b) SELECT id, seq, aggregate_id, event_type, payload, occurred_at, attempts, next_attempt_at
+         FROM outbox_messages
          WHERE aggregate_id = $1 AND published_at IS NULL
-         ORDER BY occurred_at, id LIMIT 1 FOR UPDATE;
-         Pega o pendente mais antigo, sem filtrar por next_attempt_at. Se next_attempt_at > now(), pula o agregado inteiro: nenhum evento posterior do mesmo agregado sai antes dele.
-      c) Publicar em wager-events.fifo com MessageGroupId = walletId e MessageDeduplicationId = eventId.
-      d) Sucesso: após o ack do SQS, UPDATE published_at = now(); COMMIT, que libera o lock.
-      e) Falha no envio: UPDATE attempts = attempts + 1 e next_attempt_at = agora + backoff; COMMIT. O próximo ciclo tenta de novo.
-    Falha entre o ack e o COMMIT: o evento é republicado. A duplicata é aceita, porque o consumidor deduplica por eventId e compara walletVersion.
-    Ordem: o próximo evento do agregado só é publicado depois do COMMIT do anterior. O teste de ordem está no ciclo C09 (P09.4).
+         ORDER BY seq
+         LIMIT 1
+         FOR UPDATE;
+         Sem filtro de next_attempt_at. Se next_attempt_at > now(), porque o
+         estado mudou desde o passo 1, pular o agregado inteiro: nenhum evento
+         posterior do mesmo agregado sai antes dele.
+      c) SendMessage em wager-events.fifo com MessageGroupId = walletId
+         (o aggregate_id) e MessageDeduplicationId = eventId.
+      d) Ack do SQS (resposta de sucesso do SendMessage):
+           UPDATE outbox_messages SET published_at = now()
+           WHERE id = $2 AND published_at IS NULL;
+         depois COMMIT, que libera o lock. published_at nunca é gravado antes
+         do ack.
+      e) Falha ou timeout no envio, sem ack:
+           UPDATE outbox_messages
+           SET attempts = attempts + 1, next_attempt_at = now() + $3
+           WHERE id = $2 AND published_at IS NULL;
+         ($3 = intervalo de backoff), depois COMMIT. O próximo ciclo tenta de novo.
+    Duplicata: falha entre o ack e o COMMIT republica o evento. O SQS FIFO
+    descarta a repetição com o mesmo MessageDeduplicationId dentro da janela de
+    deduplicação de 5 minutos; depois dela, o consumidor deduplica por eventId
+    e, nos eventos de wallet, compara walletVersion (seção 11.2).
+    Ordem: o próximo evento do agregado só é publicado depois do COMMIT do anterior. O teste de ordem é exigido pela Fase 8 (Concorrência) da Parte 3, com dois publishers.
 
 11.4 Métrica outbox lag = agora - occurred_at do pendente mais antigo.
 
@@ -459,6 +507,7 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
 
     CREATE TABLE outbox_messages (
       id uuid PRIMARY KEY,
+      seq bigserial NOT NULL,
       aggregate_id uuid NOT NULL,
       event_type text NOT NULL,
       payload jsonb NOT NULL,
@@ -469,7 +518,7 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
     );
 
     CREATE INDEX ix_outbox_pending
-      ON outbox_messages (next_attempt_at, occurred_at)
+      ON outbox_messages (aggregate_id, seq)
       WHERE published_at IS NULL;
 
     CREATE FUNCTION forbid_terminal_status_change() RETURNS trigger AS $$
