@@ -33,6 +33,12 @@
       },
       "style": {
         "noNonNullAssertion": "error"
+      },
+      "complexity": {
+        // Desligada: conflita com noPropertyAccessFromIndexSignature do tsconfig.json.
+        // Em tipos com index signature (process.env, Record<string, unknown>), o tsc
+        // exige obj['chave'] (TS4111), e esta regra pede obj.chave.
+        "useLiteralKeys": "off"
       }
     }
   },
