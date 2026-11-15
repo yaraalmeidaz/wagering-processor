@@ -1,14 +1,10 @@
 /**
  * Relógio injetável para testes que dependem de tempo (backoff, TTL,
- * next_attempt_at). Sem imports de src/ nem de framework.
- *
- * A SPEC (seção 2.2, src/application/) prevê uma porta `Clock` na aplicação.
- * Quando ela existir, este helper deve implementá-la em vez de declarar a
- * própria interface.
+ * next_attempt_at). Implementa a porta Clock da aplicação (SPEC 2.2).
  */
-export interface Clock {
-  now(): Date;
-}
+import type { Clock } from '../../src/application/ports/clock';
+
+export type { Clock };
 
 export class SystemClock implements Clock {
   now(): Date {
