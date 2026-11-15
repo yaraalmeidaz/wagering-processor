@@ -12,6 +12,8 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "guards": "bun scripts/guards/domain-imports.ts && bun scripts/guards/money-number.ts && bun scripts/guards/integration-mocks.ts",
+    "db:migrate:up": "bun scripts/db/migrate.ts up",
+    "db:migrate:down": "bun scripts/db/migrate.ts down",
     "test": "bun test ./test/unit",
     "test:integration": "bun test --pass-with-no-tests ./test/integration",
     "test:concurrency": "bun test --pass-with-no-tests ./test/concurrency",
@@ -24,6 +26,9 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
+    "@mikro-orm/core": "^7.2.9",
+    "@mikro-orm/migrations": "^7.2.9",
+    "@mikro-orm/postgresql": "^7.2.9",
     "@nestjs/common": "^12.5.0",
     "@nestjs/core": "^12.5.0",
     "@nestjs/platform-express": "^12.5.0",

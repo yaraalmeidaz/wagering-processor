@@ -28,6 +28,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "migrations/**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage", "test/guards/fixtures"]
 }
