@@ -117,7 +117,7 @@ describe('MikroOrmUnitOfWork', () => {
         now: NOW,
       });
       if (!debit.ok) throw new Error('esperava débito');
-      await wallets.update(wallet);
+      await wallets.update(wallet, 1);
     });
 
     const secondRead = await uow.run(({ wallets }) => wallets.findById(created.id));

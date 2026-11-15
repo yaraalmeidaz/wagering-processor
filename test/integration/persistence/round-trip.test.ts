@@ -169,7 +169,7 @@ describe('round-trip domínio -> banco -> domínio', () => {
     await uow.run(async ({ wallets, transactions, ledger }) => {
       await transactions.add(win);
       await transactions.add(bet);
-      await wallets.update(wallet);
+      await wallets.update(wallet, 1);
       await ledger.append(credit.entry as WalletLedgerEntry);
       await ledger.append(debit.entry as WalletLedgerEntry);
     });
