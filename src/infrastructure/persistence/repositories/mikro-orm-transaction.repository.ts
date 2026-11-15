@@ -1,5 +1,9 @@
+import { LockMode } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
-import type { TransactionRepository } from '../../../application/ports/transaction-repository';
+import type {
+  FindOptions,
+  TransactionRepository,
+} from '../../../application/ports/transaction-repository';
 import type { WagerTransaction } from '../../../domain/wager-transaction';
 import { WagerTransactionOrmEntity } from '../entities/WagerTransactionOrmEntity';
 import {
@@ -19,13 +23,36 @@ export class MikroOrmTransactionRepository implements TransactionRepository {
   }
 
   async findById(id: string): Promise<WagerTransaction | null> {
+    return this.#findOne({ id }, {});
+  }
+
+  async findByIdempotencyKey(
+    key: string,
+    options: FindOptions = {},
+  ): Promise<WagerTransaction | null> {
+    return this.#findOne({ idempotencyKey: key }, options);
+  }
+
+  async findByProviderAndExternalId(
+    providerId: string,
+    externalTransactionId: string,
+    options: FindOptions = {},
+  ): Promise<WagerTransaction | null> {
+    return this.#findOne({ providerId, externalTransactionId }, options);
+  }
+
+  async hasProcessedReversal(
+    providerId: string,
+    referenceExternalTransactionId: string,
+  ): Promise<boolean> {
     this.#scope.assertActive();
-    const row = await this.#em.findOne(
-      WagerTransactionOrmEntity,
-      { id },
-      { disableIdentityMap: true },
-    );
-    return row === null ? null : transactionFromRow(row);
+    const count = await this.#em.count(WagerTransactionOrmEntity, {
+      providerId,
+      referenceExternalTransactionId,
+      status: 'PROCESSED',
+      kind: { $in: ['REFUND', 'ROLLBACK'] },
+    });
+    return count > 0;
   }
 
   async add(transaction: WagerTransaction): Promise<void> {
@@ -41,5 +68,19 @@ export class MikroOrmTransactionRepository implements TransactionRepository {
       { id: transaction.id },
       transactionStateToRow(transaction),
     );
+  }
+
+  async #findOne(
+    where: Partial<
+      Record<'id' | 'idempotencyKey' | 'providerId' | 'externalTransactionId', string>
+    >,
+    options: FindOptions,
+  ): Promise<WagerTransaction | null> {
+    this.#scope.assertActive();
+    const row = await this.#em.findOne(WagerTransactionOrmEntity, where, {
+      disableIdentityMap: true,
+      ...(options.forUpdate === true ? { lockMode: LockMode.PESSIMISTIC_WRITE } : {}),
+    });
+    return row === null ? null : transactionFromRow(row);
   }
 }
