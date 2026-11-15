@@ -13,6 +13,8 @@ Todo evento é gravado no outbox na mesma transação do efeito e só é publica
 - **Exclusão entre publishers:** `pg_try_advisory_xact_lock(hashtext($1::text))`, com `$1 = aggregate_id`. O cast para `text` é obrigatório. A colisão de `hashtext` (int4) entre carteiras é tolerada: o único efeito é pular um agregado naquele ciclo, sem risco para a ordem (SPEC 11.3, passo 2a).
 - **Confirmação:** `published_at` só é gravado depois do ack do `SendMessage`. A transação continua aberta durante a chamada ao SQS, e o advisory lock e o `FOR UPDATE` só são liberados no COMMIT (SPEC 11.3, passos 2c a 2e).
 - **Índice:** `ix_outbox_pending ON outbox_messages (aggregate_id, seq) WHERE published_at IS NULL` (SPEC 12).
+- **Criação com saldo inicial maior que zero:** o `OPENING` gera `WagerTransactionProcessed` e `WalletBalanceChanged` (`walletVersion = 1`), gravados no outbox na mesma transação da wallet. Base: enunciado §11 (qualquer transação aplicada; saldo mudou), §6.3 (`OPENING` é transação interna de crédito) e §9 (criação com `OPENING` na mesma transação SQL), e RN-04, RN-26 e RN-28. Esta é a interpretação adotada, porque o enunciado não cita o `OPENING` na tabela de eventos.
+- **Criação com saldo zero:** não há `OPENING` e não há evento.
 
 ## Alternativas consideradas
 - **`FOR UPDATE SKIP LOCKED` por linha, sem lock por agregado:** rejeitado porque dois publishers poderiam pegar eventos diferentes da mesma carteira e publicá-los fora de ordem (SPEC, decisão 13).
