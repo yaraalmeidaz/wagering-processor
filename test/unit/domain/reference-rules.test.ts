@@ -10,7 +10,6 @@ const brl = (amount: string): Money => Money.create(amount, 'BRL');
 
 const transaction: ReferenceCheckInput['transaction'] = {
   kind: 'REFUND',
-  providerId: 'provider-1',
   playerId: 'player-1',
   walletId: 'wallet-1',
   roundId: 'round-1',
@@ -20,7 +19,6 @@ const transaction: ReferenceCheckInput['transaction'] = {
 const bet: ReferenceSnapshot = {
   kind: 'BET',
   status: 'PROCESSED',
-  providerId: 'provider-1',
   playerId: 'player-1',
   walletId: 'wallet-1',
   roundId: 'round-1',
@@ -50,8 +48,12 @@ describe('validação de referência, ordem da SPEC 4.2', () => {
     );
   });
 
+  test('providerId diferente não causa REFERENCE_CONTEXT_MISMATCH: o provider é filtro da busca (RN-11, RN-14)', () => {
+    const otherProvider = { ...transaction, providerId: 'provider-2' };
+    expect(check({ transaction: otherProvider })).toEqual({ outcome: 'OK' });
+  });
+
   test.each([
-    ['providerId', { providerId: 'provider-2' }],
     ['playerId', { playerId: 'player-2' }],
     ['walletId', { walletId: 'wallet-2' }],
     ['roundId', { roundId: 'round-2' }],

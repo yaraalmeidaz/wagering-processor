@@ -80,6 +80,14 @@ describe('WagerTransaction: transições válidas (RN-25)', () => {
     expect(tx.resultingBalance?.amount).toBe('5.00');
   });
 
+  test('REJECTED aceita resulting_balance nulo quando o saldo da wallet está em outra moeda (RN-01)', () => {
+    const tx = WagerTransaction.create(props({ money: Money.create('10.00', 'USD') }));
+    tx.reject('CURRENCY_MISMATCH', null, T1);
+    expect(tx.status).toBe('REJECTED');
+    expect(tx.failureCode).toBe('CURRENCY_MISMATCH');
+    expect(tx.resultingBalance).toBeNull();
+  });
+
   test('PENDING -> PENDING_REFERENCE grava next_reference_attempt_at com attempts 0 (SPEC 8.1)', () => {
     const tx = pendingReference();
     expect(tx.status).toBe('PENDING_REFERENCE');

@@ -7,7 +7,6 @@ import type { TransactionStatus } from './wager-transaction';
 export interface ReferenceSnapshot {
   readonly kind: WagerKind;
   readonly status: TransactionStatus;
-  readonly providerId: string;
   readonly playerId: string;
   readonly walletId: string;
   readonly roundId: string;
@@ -17,7 +16,6 @@ export interface ReferenceSnapshot {
 export interface ReferenceCheckInput {
   readonly transaction: {
     readonly kind: WagerKind;
-    readonly providerId: string;
     readonly playerId: string;
     readonly walletId: string;
     readonly roundId: string;
@@ -76,13 +74,12 @@ export function validateReference(input: ReferenceCheckInput): ReferenceCheckRes
   return { outcome: 'OK' };
 }
 
-/** Provedor, jogador, wallet, rodada e moeda iguais (RN-14). */
+/** Jogador, wallet, rodada e moeda iguais (RN-14). O provider é filtro da busca (RN-11). */
 function sameContext(
   transaction: ReferenceCheckInput['transaction'],
   reference: ReferenceSnapshot,
 ): boolean {
   return (
-    transaction.providerId === reference.providerId &&
     transaction.playerId === reference.playerId &&
     transaction.walletId === reference.walletId &&
     transaction.roundId === reference.roundId &&
