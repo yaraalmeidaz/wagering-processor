@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { Migrator } from '@mikro-orm/migrations';
 import { defineConfig } from '@mikro-orm/postgresql';
+import { ORM_ENTITIES } from './entities';
 
 /** Diretório versionado das migrations (AGENTS.md §7). */
 export const MIGRATIONS_PATH = fileURLToPath(new URL('../../../migrations', import.meta.url));
@@ -21,8 +22,7 @@ export function createOrmConfig(overrides: { dbName?: string } = {}) {
     user: requiredEnv('POSTGRES_USER'),
     password: requiredEnv('POSTGRES_PASSWORD'),
     dbName: overrides.dbName ?? requiredEnv('POSTGRES_DB'),
-    entities: [],
-    discovery: { warnWhenNoEntities: false },
+    entities: ORM_ENTITIES,
     extensions: [Migrator],
     migrations: {
       path: MIGRATIONS_PATH,
