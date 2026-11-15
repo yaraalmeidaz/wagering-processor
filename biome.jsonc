@@ -20,6 +20,11 @@
       "quoteStyle": "single",
       "semicolons": "always",
       "trailingCommas": "all"
+    },
+    "parser": {
+      // NestJS (stack obrigatória, AGENTS.md §1) usa decorators de parâmetro
+      // (@Inject, @Body, @Param), que o parser do Biome só aceita com esta opção.
+      "unsafeParameterDecoratorsEnabled": true
     }
   },
   "linter": {
