@@ -129,9 +129,22 @@ perdido, evento publicado antes do commit.
     kind: OPENING (interno), BET, WIN, LOSS, REFUND, ROLLBACK.
     status: PENDING, PENDING_REFERENCE, PROCESSED, REJECTED, FAILED.
     Terminais: PROCESSED, REJECTED, FAILED.
-    Transições válidas:
-      PENDING           -> PROCESSED | REJECTED | PENDING_REFERENCE | FAILED
-      PENDING_REFERENCE -> PROCESSED | REJECTED | FAILED
+    Transições válidas (RN-25), as mesmas de TRANSITIONS em src/domain/wager-transaction.ts.
+    PENDING existe só em memória: a transação é gravada já no estado de destino.
+
+    | De | Para | Condição | Origem |
+    |---|---|---|---|
+    | PENDING | PROCESSED | O domínio aplica o efeito do kind, inclusive LOSS e valor zero (RN-05 a RN-10). O OPENING interno também (RN-04). | Enunciado §6.3 |
+    | PENDING | REJECTED | Rejeição de negócio com failureCode (RN-19). Inclui o 23505 de reversão, que vira REFERENCE_ALREADY_REVERSED em transação nova (seção 6.3). | Enunciado §6.3 e §7 regra 6 |
+    | PENDING | PENDING_REFERENCE | A referência não existe (RN-12). | Enunciado §6.3 e §7.1 |
+    | PENDING | FAILED | Erro permanente de infraestrutura (RN-41). Permitida pelo domínio. Reservada: nesta fase nenhum caminho a usa, porque o HTTP responde 503 e a fila não faz ack (seção 5.9), e nada é gravado. | Interpretação |
+    | PENDING_REFERENCE | PROCESSED | O resolvedor encontra a referência e o domínio aplica o efeito (seção 8.2). | Enunciado §6.3 e §7.1 |
+    | PENDING_REFERENCE | REJECTED | Limite de tentativas ou TTL esgotado: REFERENCE_NOT_FOUND (RN-12). Referência encontrada e inválida (RN-13 a RN-17). 23505 de reversão: REFERENCE_ALREADY_REVERSED (seção 6.3). | Enunciado §7.1 para o limite; interpretação para os demais |
+    | PENDING_REFERENCE | FAILED | Erro permanente de infraestrutura no resolvedor de pendências (RN-41; seção 8.2). | Interpretação |
+
+    PROCESSED, REJECTED e FAILED não têm saída. Reagendar uma pendência
+    (scheduleNextReferenceAttempt) só muda attempts e next_reference_attempt_at,
+    sem mudar o status.
     Qualquer outra transição lança InvalidTransactionStateError.
     Guarda o snapshot resulting_balance (saldo observado ao processar). Obrigatório em PROCESSED (CHECK no schema, seção 12).
     Guarda failureCode quando REJECTED. FAILED não tem failureCode (RN-40).
@@ -194,6 +207,16 @@ HTTP e SQS executam o MESMO caso de uso. Não há caminho paralelo.
     kind, money{amount,currency}, referenceExternalTransactionId (quando houver).
     Excluídos: header Idempotency-Key e metadados de transporte.
     Algoritmo: SHA-256 em hex. Documentar no ARCHITECTURE.md.
+
+    Chave de idempotência (RN-23):
+    - {providerId}:{externalTransactionId} é a convenção recomendada para o
+      cliente montar o header Idempotency-Key.
+    - O header é obrigatório e é a fonte da verdade. Ausente: 400
+      MISSING_IDEMPOTENCY_KEY. Na fila, a chave vem em data.idempotencyKey (seção 10).
+    - O servidor não gera nem completa a chave. Uma chave fora da convenção é
+      aceita como veio.
+    Interpretação: o enunciado §9 chama a convenção de "default". Como o header é
+    obrigatório, o default vale para o cliente, não para o servidor.
 
 5.3 Abrir transação SQL.
     SET LOCAL lock_timeout = '3000ms';
@@ -301,7 +324,7 @@ Regra: RN-10. Implementação: Money.isZero() é válido; Wallet não altera sal
     | Negócio permanente | INSUFFICIENT_FUNDS, CURRENCY_MISMATCH, WALLET_PLAYER_MISMATCH, REFERENCE_* | Persistir REJECTED, commit, ack. Sem retry, sem DLQ. |
     | Malformada / inválida | payload sem schema, JSON inválido, kind OPENING, type diferente (RN-34) | Não processar. Enviar para a DLQ e fazer ack da original. |
     | Transitória de infra | timeout de banco, deadlock, lock_timeout, SQS indisponível, wallet inexistente na fila (RN-39) | Não fazer ack. Lançar erro. O SQS reentrega com backoff. |
-    | Permanente de infra | esgotou maxReceiveCount | Vai para a DLQ. FAILED só é gravado pelo resolvedor de pendências (RN-41). |
+    | Permanente de infra | esgotou maxReceiveCount | Vai para a DLQ. Nenhuma transação foi commitada, então nada é gravado como FAILED (RN-41). |
 
 9.2 Mapeamento HTTP
 
@@ -593,7 +616,7 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
     GET  /wagering/transactions/:transactionId
     GET  /providers/:providerId/wagering/transactions/:externalTransactionId
     POST /wagering/transactions         header Idempotency-Key obrigatório
-      Default da chave: "{providerId}:{externalTransactionId}"
+      Convenção da chave para o cliente: "{providerId}:{externalTransactionId}" (seção 5.2)
     POST /wallets/:walletId/reconciliation
       Sem corpo na requisição (RN-37). Soma o ledger de forma independente (não usa balance_after).
       Resposta: { walletId, storedBalance, calculatedBalance, difference, consistent, checkedEntries }.
@@ -605,6 +628,32 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
     ARCHITECTURE.md e expor um ponto de extensão (AuthGuard no-op ou
     ProviderIdentityPort). Identidade do provedor na mensagem continua sujeita
     às validações de domínio.
+
+    Detalhes do contrato (ADR-0009):
+    - Dinheiro sempre como { amount: string decimal, currency }. Nenhum number.
+    - Erro: { code, message, details? }, com code da seção 9.2 e sem failureCode.
+    - 503 TRANSIENT_FAILURE com Retry-After: 1. Conflito de CAS da wallet também é 503.
+    - JSON malformado, corpo que não é objeto e UUID malformado na rota: 400 INVALID_PAYLOAD.
+    - POST /wagering/transactions responde { transactionId, status, failureCode, balance,
+      idempotentReplay }, com balance = resulting_balance da época (RN-20).
+    - POST /wallets: walletId gerado pelo servidor. 201 com { walletId, playerId, balance,
+      version, createdAt, updatedAt }. O OPENING interno usa providerId "internal",
+      externalTransactionId "opening:{walletId}" e idempotencyKey "internal:opening:{walletId}".
+    - Ledger: do mais recente ao mais antigo, por (created_at DESC, id DESC). limit padrão 50,
+      de 1 a 100. Cursor = base64url de { createdAt, id }. Inválido: 400 INVALID_PAYLOAD.
+      Resposta { items, nextCursor }, nextCursor nulo na última página.
+    - Reconciliação: 200; difference = storedBalance - calculatedBalance. Divergência vai
+      para o log e para a métrica reconciliation_divergences_total, sem correção. A wallet
+      é lida com FOR UPDATE na mesma transação da soma do ledger.
+    - Log de divergência: uma linha JSON { timestamp, level, event:
+      "reconciliation_divergence", correlationId, walletId, result: { consistent,
+      checkedEntries } }, sem valores financeiros (seção 14.1).
+    - correlationId: header X-Correlation-Id quando tem de 1 a 128 caracteres de
+      [A-Za-z0-9._:-]; ausente ou fora desse formato, o servidor gera um UUID.
+    - Fora da tabela 9.2: rota inexistente 404 NOT_FOUND; AuthGuard negando 403 FORBIDDEN;
+      erro desconhecido 503 TRANSIENT_FAILURE (seção 5.9).
+    - /health/ready: 200 { status: "ok", checks: { postgres: "ok" } } ou 503 com
+      status "unavailable". O SQS entra na verificação com a mensageria (Fase 6).
 
 ==========================================================================
 14. OBSERVABILIDADE
