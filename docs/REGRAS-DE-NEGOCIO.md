@@ -60,8 +60,8 @@ Cada regra indica sua origem:
 **RN-13.** Se a referência existe mas não está `PROCESSED`, a transação é rejeitada com `REFERENCE_NOT_PROCESSED`.
 *Origem: interpretação. O enunciado trata só a referência ausente.*
 
-**RN-14.** Provedor, jogador, wallet, rodada e moeda da referência devem ser iguais aos da transação atual. Caso contrário, rejeição com `REFERENCE_CONTEXT_MISMATCH`.
-*Origem: enunciado §7 regra 2.*
+**RN-14.** Jogador, wallet, rodada e moeda da referência devem ser iguais aos da transação atual. Caso contrário, rejeição com `REFERENCE_CONTEXT_MISMATCH`. O provider é filtro da busca da referência (RN-11), não checagem de contexto: referência de outro provider não é encontrada.
+*Origem: enunciado §7 regra 2. Tratar o provider como filtro da busca, e não como campo de contexto, é interpretação (ADR-0005).*
 
 **RN-15.** Para `REFUND` e `ROLLBACK`, o valor deve ser igual ao valor da referência. Reversão parcial está fora do escopo. Diferença gera `REFERENCE_AMOUNT_MISMATCH`.
 *Origem: enunciado §7 regra 5.*
@@ -74,6 +74,9 @@ Cada regra indica sua origem:
 
 **RN-18.** Reversão parcial não existe neste escopo.
 *Origem: enunciado §7 regra 5.*
+
+**RN-42.** `BET` e `LOSS` não aceitam referência. Se chegarem com `referenceExternalTransactionId`, a transação é rejeitada com `REFERENCE_KIND_NOT_ALLOWED`, sem lançamento.
+*Origem: interpretação. O enunciado §7 só prevê referência para `WIN`, `REFUND` e `ROLLBACK`, e não diz o que fazer com `BET` ou `LOSS` que chegam com uma. Registrada na ADR-0005.*
 
 ## Rejeição, replay e idempotência
 
