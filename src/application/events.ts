@@ -1,6 +1,8 @@
 import type { MoneyProps } from '../domain/money';
 import type { WagerTransaction } from '../domain/wager-transaction';
 import type { Wallet } from '../domain/wallet';
+import type { WalletLedgerEntry } from '../domain/wallet-ledger-entry';
+import type { OutboxRecord } from './ports/outbox-repository';
 
 export interface EventContext {
   readonly eventId: string;
@@ -14,7 +16,8 @@ export interface EventContext {
 /** Envelope da SPEC 11.2. eventType e version vêm do tipo, nunca de string solta. */
 export abstract class IntegrationEvent<T extends object> {
   abstract readonly eventType: string;
-  readonly version: number = 1;
+  /** Literal em cada subclasse (SPEC 11.2). */
+  abstract readonly version: number;
   readonly context: EventContext;
   readonly data: T;
 
@@ -70,21 +73,44 @@ export interface PendingReferenceData extends TransactionEventData {
 /** RN-26: toda transação aplicada, inclusive LOSS e valor zero. */
 export class WagerTransactionProcessed extends IntegrationEvent<TransactionEventData> {
   readonly eventType = 'WagerTransactionProcessed' as const;
+  readonly version = 1;
 }
 
 /** RN-27: toda rejeição de negócio. */
 export class WagerTransactionRejected extends IntegrationEvent<TransactionEventData> {
   readonly eventType = 'WagerTransactionRejected' as const;
+  readonly version = 1;
 }
 
 /** RN-28: somente quando o saldo muda. */
 export class WalletBalanceChanged extends IntegrationEvent<WalletBalanceChangedData> {
   readonly eventType = 'WalletBalanceChanged' as const;
+  readonly version = 1;
+
+  /** Evento da mudança de saldo descrita pelo lançamento, já aplicado na wallet. */
+  static from(wallet: Wallet, entry: WalletLedgerEntry, ctx: EventContext): WalletBalanceChanged {
+    return new WalletBalanceChanged(
+      ctx,
+      walletBalanceChangedData(wallet, entry.transactionId, entry.balanceBefore.toJSON()),
+    );
+  }
 }
 
 /** RN-29: quando a transação entra em PENDING_REFERENCE. */
 export class WagerTransactionPendingReference extends IntegrationEvent<PendingReferenceData> {
   readonly eventType = 'WagerTransactionPendingReference' as const;
+  readonly version = 1;
+}
+
+/** Registro do outbox para o evento. O id é o eventId do envelope (SPEC 11.2; ADR-0006). */
+export function outboxRecordOf(event: IntegrationEvent<object>): OutboxRecord {
+  return {
+    id: event.context.eventId,
+    aggregateId: event.context.aggregateId,
+    eventType: event.eventType,
+    payload: event.toJSON(),
+    occurredAt: event.context.occurredAt,
+  };
 }
 
 export function transactionEventData(transaction: WagerTransaction): TransactionEventData {

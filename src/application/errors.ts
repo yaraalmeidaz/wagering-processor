@@ -9,11 +9,20 @@ export abstract class ApplicationError extends Error {
   }
 }
 
-/** Payload inválido (SPEC 5.1): 400 INVALID_PAYLOAD na API, DLQ na fila (RN-34). */
-export class InvalidWagerInputError extends ApplicationError {}
+/** Entrada inválida (SPEC 5.1): 400 INVALID_PAYLOAD na API. */
+export class InvalidInputError extends ApplicationError {}
+
+/** Payload de transação inválido: 400 INVALID_PAYLOAD na API, DLQ na fila (RN-34). */
+export class InvalidWagerInputError extends InvalidInputError {}
 
 /** Wallet inexistente (RN-39): 404 na API, sem ack na fila. */
 export class WalletNotFoundError extends ApplicationError {}
+
+/** Transação inexistente: 404 TRANSACTION_NOT_FOUND (SPEC 9.2). */
+export class TransactionNotFoundError extends ApplicationError {}
+
+/** Wallet duplicada para (playerId, currency): 409 WALLET_ALREADY_EXISTS (RN-03). */
+export class WalletAlreadyExistsError extends ApplicationError {}
 
 /** Conflito de idempotência (RN-21, RN-22): 409. */
 export class IdempotencyConflictError extends ApplicationError {

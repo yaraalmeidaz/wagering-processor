@@ -1,4 +1,3 @@
-import { InvalidMoneyError } from '../../domain/errors';
 import type { FailureCode } from '../../domain/failure-code';
 import {
   decideIdempotency,
@@ -6,7 +5,7 @@ import {
   type IncomingIdempotency,
   type StoredIdempotency,
 } from '../../domain/idempotency';
-import { Money, type MoneyProps } from '../../domain/money';
+import type { Money, MoneyProps } from '../../domain/money';
 import { nextReferenceAttemptAt } from '../../domain/pending-reference-backoff';
 import { type ReferenceSnapshot, validateReference } from '../../domain/reference-rules';
 import {
@@ -26,13 +25,14 @@ import {
 } from '../errors';
 import {
   type IntegrationEvent,
+  outboxRecordOf,
   transactionEventData,
   WagerTransactionPendingReference,
   WagerTransactionProcessed,
   WagerTransactionRejected,
   WalletBalanceChanged,
-  walletBalanceChangedData,
 } from '../events';
+import { requiredMoney, requiredText, requiredUuid } from '../input';
 import { payloadHash } from '../payload-hash';
 import type { Clock } from '../ports/clock';
 import type { TransactionRepository } from '../ports/transaction-repository';
@@ -70,7 +70,6 @@ export interface ProcessWagerDependencies {
 
 /** Índice parcial de reversão única (SPEC 6.2; ADR-0004). */
 const REVERSAL_CONSTRAINT = 'uq_wager_single_processed_reversal';
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ValidatedRequest {
   readonly idempotencyKey: string;
@@ -194,13 +193,7 @@ export class ProcessWagerTransaction {
       createdAt: now,
     });
     const emit = (event: IntegrationEvent<object>) =>
-      repositories.outbox.append({
-        id: event.context.eventId,
-        aggregateId: event.context.aggregateId,
-        eventType: event.eventType,
-        payload: event.toJSON(),
-        occurredAt: event.context.occurredAt,
-      });
+      repositories.outbox.append(outboxRecordOf(event));
     const context = () => ({
       eventId: crypto.randomUUID(),
       aggregateId: wallet.id,
@@ -281,12 +274,7 @@ export class ProcessWagerTransaction {
       await repositories.wallets.update(wallet, expectedVersion);
       await repositories.ledger.append(outcome.entry);
       // RN-28: só quando o saldo muda.
-      await emit(
-        new WalletBalanceChanged(
-          context(),
-          walletBalanceChangedData(wallet, transaction.id, outcome.balanceBefore.toJSON()),
-        ),
-      );
+      await emit(WalletBalanceChanged.from(wallet, outcome.entry, context()));
     }
     return resultOf(transaction, false);
   }
@@ -368,32 +356,17 @@ function resultOf(transaction: WagerTransaction, idempotentReplay: boolean): Pro
 
 /** SPEC 5.1: payload inválido não vira transação. */
 function validate(input: ProcessWagerInput): ValidatedRequest {
-  const text = (value: unknown, field: string): string => {
-    if (typeof value !== 'string' || value.trim() === '') {
-      throw new InvalidWagerInputError(`${field} é obrigatório`);
-    }
-    return value;
-  };
-  const uuid = (value: unknown, field: string): string => {
-    const checked = text(value, field);
-    if (!UUID_PATTERN.test(checked)) throw new InvalidWagerInputError(`${field} precisa ser uuid`);
-    return checked;
-  };
+  const text = (value: unknown, field: string) =>
+    requiredText(value, field, InvalidWagerInputError);
+  const uuid = (value: unknown, field: string) =>
+    requiredUuid(value, field, InvalidWagerInputError);
 
   const kind = text(input.kind, 'kind');
   if (!isExternalKind(kind)) {
     // OPENING é interno e não entra pela API nem pela fila (RN-04).
     throw new InvalidWagerInputError(`kind não aceito: ${kind}`);
   }
-  let money: Money;
-  try {
-    money = Money.create(input.money?.amount, input.money?.currency);
-  } catch (error) {
-    if (error instanceof InvalidMoneyError) {
-      throw new InvalidWagerInputError(error.message, { cause: error });
-    }
-    throw error;
-  }
+  const money = requiredMoney(input.money, 'money', InvalidWagerInputError);
   const reference =
     input.referenceExternalTransactionId === undefined ||
     input.referenceExternalTransactionId === null
