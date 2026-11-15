@@ -147,7 +147,7 @@ perdido, evento publicado antes do commit.
 ==========================================================================
 4. REGRAS DE NEGÓCIO
 ==========================================================================
-As regras estão em docs/REGRAS-DE-NEGOCIO.md (RN-01 a RN-41). Este documento não repete o texto. Cada item abaixo cita a regra que aplica.
+As regras estão em docs/REGRAS-DE-NEGOCIO.md (RN-01 a RN-42). Este documento não repete o texto. Cada item abaixo cita a regra que aplica.
 
 4.1 Efeito por kind: OPENING (RN-04), BET (RN-05), WIN (RN-06), LOSS (RN-07), REFUND (RN-08), ROLLBACK (RN-09).
 
@@ -161,10 +161,22 @@ As regras estão em docs/REGRAS-DE-NEGOCIO.md (RN-01 a RN-41). Este documento n�
     g) reversão que deixa saldo negativo: REVERSAL_WOULD_CAUSE_NEGATIVE_BALANCE (RN-17).
     O item g) é verificado pelo débito da Wallet, com REVERSAL_WOULD_CAUSE_NEGATIVE_BALANCE,
     e não por validateReference, que cobre os itens a) a f).
+    A busca da referência é sempre por (providerId, referenceExternalTransactionId)
+    (RN-11). Referência de outro provider é tratada como referência inexistente: a
+    transação fica PENDING_REFERENCE no item a) e vira REJECTED com REFERENCE_NOT_FOUND
+    depois do limite (RN-12). REFERENCE_CONTEXT_MISMATCH no item c) vale para a
+    referência do mesmo provider com player, wallet, moeda ou rodada diferentes (RN-14).
+    Ver ADR-0005.
 
 4.3 Demais rejeições: CURRENCY_MISMATCH (RN-01), WALLET_PLAYER_MISMATCH (RN-38), INSUFFICIENT_FUNDS (RN-05).
     CURRENCY_MISMATCH e WALLET_PLAYER_MISMATCH são verificados antes da validação de
     referência da seção 4.2, porque não exigem leitura adicional.
+    BET ou LOSS com referenceExternalTransactionId: REFERENCE_KIND_NOT_ALLOWED (RN-42),
+    verificado logo depois desses dois e antes da seção 4.2. Ver ADR-0005.
+    CURRENCY_MISMATCH não tem snapshot: a transação fica REJECTED com resulting_balance
+    nulo, porque wager_transactions tem uma só coluna currency para amount e
+    resulting_balance (seção 12), e o saldo da wallet está em outra moeda. O replay
+    responde balance null pelo mesmo motivo (RN-20; ADR-0005).
 
 4.4 Replay, conflito e formato de hash: RN-20 a RN-24. Estados: RN-25. FAILED: RN-41.
 

@@ -20,6 +20,7 @@ O slow-path abre a transação com `SET LOCAL lock_timeout = '3000ms'` e `SET LO
 - Consequência da ordem de lock do resolvedor: ele segura a wallet por mais tempo, desde antes de travar a pendência até o COMMIT. O `FOR UPDATE SKIP LOCKED` continua valendo para a linha da pendência em `wager_transactions`.
 
 ## Verificação
-- `test/concurrency/two-bets-80.test.ts` (a criar): cenário da RN-32 com 3 ou mais processos.
-- `test/concurrency/same-bet-50x.test.ts` (a criar): mesma aposta 50 vezes em paralelo, um débito (SPEC 15.3 a).
-- `test/integration/persistence/lock-timeout.test.ts` (a criar): lock segurado por outra sessão por mais de 3 s gera `55P03` e resposta transitória (AGENTS.md §9, caos).
+- `test/integration/use-cases/two-bets-80.test.ts` (existe): cenário da RN-32 (enunciado §8) com duas apostas em paralelo no mesmo processo, cada uma com o próprio fork do EntityManager.
+- `test/concurrency/no-negative-balance.test.ts` (existe): 40 apostas em 4 processos sobre a mesma wallet. O saldo nunca fica negativo, e o ledger fecha com o saldo.
+- `test/concurrency/same-bet-50x.test.ts` (existe): mesma aposta 50 vezes, em 5 processos, um débito (SPEC 15.3 a).
+- `test/integration/use-cases/process-wager-transaction.test.ts` (existe): lock segurado por outra sessão por mais de 3 s gera `55P03` e `TransientFailureError` (AGENTS.md §9, caos).
