@@ -169,9 +169,17 @@ export class WagerTransaction {
   }
 
   /** Rejeição de negócio persistida, com failureCode e saldo da época (RN-19, RN-20). */
-  reject(failureCode: FailureCode, resultingBalance: Money, now: Date): void {
+  /**
+   * Nulo só quando o saldo da wallet está em outra moeda (CURRENCY_MISMATCH): o
+   * schema guarda amount e resulting_balance numa única coluna de moeda (SPEC 12).
+   */
+  reject(failureCode: FailureCode, resultingBalance: Money | null, now: Date): void {
     this.#transitionTo('REJECTED');
-    this.#setResultingBalance(resultingBalance);
+    if (resultingBalance === null) {
+      this.#resultingBalance = null;
+    } else {
+      this.#setResultingBalance(resultingBalance);
+    }
     this.#failureCode = failureCode;
     this.#processedAt = new Date(now);
   }
