@@ -4,7 +4,7 @@ Status: proposta
 Data: 2026-11-15
 
 ## Contexto
-Um `REFUND`, `ROLLBACK` ou `WIN` pode chegar antes da transação que ele referencia. Se a referência não existe, a transação vira `PENDING_REFERENCE` e é reprocessada depois (RN-12; SPEC 4.2 a). O enunciado §7.1 pede backoff exponencial e deixa o limite e o TTL a cargo do candidato, com justificativa (RN-12). O reprocessamento é feito pelo resolvedor (SPEC 8.2), e `FAILED` só é gravado por ele (RN-41).
+Um `REFUND`, `ROLLBACK` ou `WIN` pode chegar antes da transação que ele referencia. Se a referência não existe, a transação vira `PENDING_REFERENCE` e é reprocessada depois (RN-12; SPEC 4.2 a). O enunciado §7.1 pede backoff exponencial e deixa o limite e o TTL a cargo do candidato, com justificativa (RN-12). O reprocessamento é feito pelo resolvedor (SPEC 8.2), que grava `FAILED` quando encontra erro permanente de infraestrutura (RN-41).
 
 ## Decisão
 - **Marcação (SPEC 8.1):** ao entrar em `PENDING_REFERENCE`, grava `next_reference_attempt_at` e `attempts = 0`, e publica `WagerTransactionPendingReference` (RN-29).

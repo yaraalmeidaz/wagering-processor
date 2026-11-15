@@ -103,8 +103,8 @@ Cada regra indica sua origem:
 **RN-25.** Estados terminais são `PROCESSED`, `REJECTED` e `FAILED`. Transições válidas: `PENDING` vai para `PROCESSED`, `REJECTED`, `PENDING_REFERENCE` ou `FAILED`. `PENDING_REFERENCE` vai para `PROCESSED`, `REJECTED` ou `FAILED`. Qualquer outra transição lança `InvalidTransactionStateError`: é erro de programação, não caminho de negócio.
 *Origem: enunciado §6.3 (estados terminais; "defina e documente as transições válidas").*
 
-**RN-41.** `FAILED` é gravado somente pelo resolvedor de pendências, quando ocorre erro permanente de infraestrutura depois que a transação já existe. O caminho da fila não usa `FAILED`.
-*Origem: enunciado §6.3 define o estado. Quando ele é usado é interpretação.*
+**RN-41.** `FAILED` é estado terminal (RN-25) e registra erro permanente de infraestrutura depois que a transação já existe. Não é rejeição de negócio e não tem `failureCode` (RN-40). É auditável: a linha fica gravada, não muda mais de status (`trg_wager_terminal_status`), pode ser consultada e o replay responde `500 TRANSACTION_FAILED`. A regra não restringe o estado de origem: `PENDING` e `PENDING_REFERENCE` podem ir para `FAILED`, conforme RN-25.
+*Origem: enunciado §6.3 define o estado como terminal. Tratar FAILED como erro permanente de infraestrutura, auditável e sem restrição de origem é interpretação. A versão anterior desta regra restringia `FAILED` ao resolvedor de pendências; a restrição foi retirada (ADR-0005).*
 
 ## Eventos
 
