@@ -11,6 +11,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "guards": "bun scripts/guards/domain-imports.ts && bun scripts/guards/money-number.ts && bun scripts/guards/integration-mocks.ts",
     "test": "bun test ./test/unit",
     "test:integration": "bun test --pass-with-no-tests ./test/integration",
     "test:concurrency": "bun test --pass-with-no-tests ./test/concurrency",
