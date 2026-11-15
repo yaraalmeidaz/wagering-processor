@@ -28,7 +28,7 @@
 - [ ] Testes escritos antes da implementação (falharam antes)
 - [ ] `bun run lint` verde
 - [ ] `bun run typecheck` verde
-- [ ] `bun test` verde
+- [ ] `bun run test` verde
 - [ ] `bun run test:integration` verde (se aplicável)
 - [ ] `bun run test:concurrency` verde (se aplicável)
 

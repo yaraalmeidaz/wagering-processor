@@ -183,6 +183,7 @@ Refs: ADR-0004, seção 2.13
     ├── unit/
     ├── integration/
     ├── concurrency/
+    ├── load/
     └── helpers/                containers, fábricas, relógio controlado
 ```
 
