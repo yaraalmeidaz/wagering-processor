@@ -25,7 +25,7 @@ Todo evento é gravado no outbox na mesma transação do efeito e só é publica
 - Custo: a transação do publisher fica aberta durante a latência do `SendMessage`.
 - Duplicata aceita: uma queda entre o ack e o COMMIT republica o evento. O SQS FIFO descarta a repetição dentro da janela de deduplicação de 5 minutos. Depois dela, o consumidor deduplica por `eventId` e, nos eventos de wallet, compara `walletVersion` (SPEC 11.2 e 11.3).
 - Risco residual:
-  - a garantia de ordem depende de todo INSERT no outbox de uma carteira acontecer sob o lock dessa carteira (SPEC 5.7 e, 6.3, 8.2 e 8.5);
+  - a garantia de ordem depende de todo INSERT no outbox de uma carteira acontecer sob o lock dessa carteira (SPEC 5.7 e, 6.3, 8.2 e 8.5) ou, na criação da wallet, antes de a linha dela ficar visível (SPEC 13, `POST /wallets`). O `POST /wallets` grava o `OPENING` na mesma transação (RN-04), sem `FOR UPDATE`, porque a linha da wallet ainda não existe. Nenhum outro evento da carteira pode ser gravado antes do COMMIT, porque a linha só fica visível depois dele. Nesse caso, a ordem `seq` depende da visibilidade do PostgreSQL, e não de um lock;
   - o intervalo de backoff do outbox não está definido (SPEC 11.3, passo 2e, `$3`);
   - o SPEC não diz se `eventId` é o mesmo valor de `outbox_messages.id`;
   - a métrica de outbox lag (SPEC 11.4) não tem índice próprio.
