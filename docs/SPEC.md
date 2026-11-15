@@ -134,7 +134,7 @@ perdido, evento publicado antes do commit.
       PENDING_REFERENCE -> PROCESSED | REJECTED | FAILED
     Qualquer outra transição lança InvalidTransactionStateError.
     Guarda o snapshot resulting_balance (saldo observado ao processar). Obrigatório em PROCESSED (CHECK no schema, seção 12).
-    Guarda failureCode quando REJECTED ou FAILED.
+    Guarda failureCode quando REJECTED. FAILED não tem failureCode (RN-40).
 
 3.4 WalletLedgerEntry
     Imutável. No máximo uma entrada por (wallet, transaction).
@@ -159,8 +159,12 @@ As regras estão em docs/REGRAS-DE-NEGOCIO.md (RN-01 a RN-41). Este documento n�
     e) valor diferente: REFERENCE_AMOUNT_MISMATCH (RN-15);
     f) já revertida: REFERENCE_ALREADY_REVERSED (RN-16);
     g) reversão que deixa saldo negativo: REVERSAL_WOULD_CAUSE_NEGATIVE_BALANCE (RN-17).
+    O item g) é verificado pelo débito da Wallet, com REVERSAL_WOULD_CAUSE_NEGATIVE_BALANCE,
+    e não por validateReference, que cobre os itens a) a f).
 
 4.3 Demais rejeições: CURRENCY_MISMATCH (RN-01), WALLET_PLAYER_MISMATCH (RN-38), INSUFFICIENT_FUNDS (RN-05).
+    CURRENCY_MISMATCH e WALLET_PLAYER_MISMATCH são verificados antes da validação de
+    referência da seção 4.2, porque não exigem leitura adicional.
 
 4.4 Replay, conflito e formato de hash: RN-20 a RN-24. Estados: RN-25. FAILED: RN-41.
 
@@ -215,7 +219,8 @@ HTTP e SQS executam o MESMO caso de uso. Não há caminho paralelo.
 5.9 Tratamento de erros
     - Rejeição de negócio NÃO é exceção. É resultado persistido com commit normal.
     - 23505 (unique_violation): ROLLBACK; forkEm = em.fork(); buscar a linha
-      já commitada; comparar hash; retornar replay ou 409. Nunca 500.
+      já commitada; comparar hash; retornar replay ou 409. Erro inesperado nunca
+      confirma sucesso. O 500 é reservado ao replay de FAILED (ADR-0005).
     - 55P03 (lock_not_available), 40P01 (deadlock), 40001 (serialization_failure),
       timeout de conexão: transitório. HTTP 503 com Retry-After. SQS: throw.
     - Erro desconhecido: transitório por padrão. Nunca confirmar sucesso.
@@ -294,6 +299,7 @@ Regra: RN-10. Implementação: Money.isZero() é válido; Wallet não altera sal
     | Replay de PROCESSED | 200 | mesmo corpo original, idempotentReplay: true |
     | PENDING_REFERENCE (nova ou replay) | 202 | status PENDING_REFERENCE, idempotentReplay conforme o caso |
     | Rejeição de negócio (nova ou replay) | 422 | status REJECTED, failureCode |
+    | Replay de transação FAILED (ADR-0005) | 500 | TRANSACTION_FAILED, sem Retry-After (falha permanente, não transitória); sem failureCode (RN-40) |
     | Payload inválido, incluindo kind OPENING (RN-04) | 400 | INVALID_PAYLOAD, detalhes de validação |
     | Idempotency-Key ausente | 400 | MISSING_IDEMPOTENCY_KEY |
     | Conflito de payload ou chave | 409 | IDEMPOTENCY_PAYLOAD_MISMATCH / IDEMPOTENCY_KEY_CONFLICT |
@@ -302,7 +308,7 @@ Regra: RN-10. Implementação: Money.isZero() é válido; Wallet não altera sal
     | Transitório | 503 | TRANSIENT_FAILURE, com Retry-After |
 
     Regra: colapsar situações distintas em um mesmo código é proibido.
-    failureCode só existe em transação REJECTED persistida. 400, 404, 409 e 503 não têm failureCode (RN-40).
+    failureCode só existe em transação REJECTED persistida. 400, 404, 409, 500 e 503 não têm failureCode (RN-40).
 
 9.3 failureCode (somente em transação REJECTED persistida, RN-19 e RN-40):
     INSUFFICIENT_FUNDS, CURRENCY_MISMATCH, WALLET_PLAYER_MISMATCH,

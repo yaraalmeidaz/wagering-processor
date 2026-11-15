@@ -62,7 +62,7 @@ Mappers em `persistence/mappers/` convertem `*OrmEntity.ts` ↔ domínio. Nenhum
 6. Domínio aplica o efeito ou produz rejeição com `failureCode`. **Rejeição é resultado persistido, não exceção.**
 7. Na mesma transação: `wager_transactions` (com `resulting_balance`), `wallets` (com CAS por `version`), `wallet_ledger_entries` (se o saldo mudou), `inbox_messages` (se veio da fila), `outbox_messages`.
 8. COMMIT. Só depois: resposta HTTP ou ack SQS.
-9. `23505` → ROLLBACK, `em.fork()`, busca a linha commitada, valida hash e responde replay ou 409. Nunca 500.
+9. `23505` → ROLLBACK, `em.fork()`, busca a linha commitada, valida hash e responde replay ou 409. Erro inesperado nunca confirma sucesso. O 500 é reservado ao replay de FAILED (ADR-0005).
 10. Transitórios (`55P03`, `40P01`, `40001`, timeout) → 503 com `Retry-After` (HTTP) ou throw sem ack (SQS).
 
 **Pendências:** referência ausente vira `PENDING_REFERENCE`. Worker com backoff exponencial (base 2 s, fator 2, teto 5 min, jitter ±20%), limite de 12 tentativas ou TTL de 24 h. Transição para `PROCESSED` que receba `23505` vira `REJECTED` com `REFERENCE_ALREADY_REVERSED`, em transação nova, sem retry.
