@@ -17,10 +17,14 @@ Usar MikroORM com PostgreSQL. Cada caso de uso roda numa única transação SQL 
 ## Consequências
 - Ganho: uma transação por caso de uso, com fronteira explícita, e o mesmo caso de uso para HTTP e SQS (SPEC 5, "Não há caminho paralelo").
 - Custo: mappers bidirecionais para cada entidade (SPEC 2.3).
-- Risco residual: a compatibilidade do MikroORM com o Bun 1.x (decorators e `reflect-metadata`) ainda não foi verificada no repositório. Deve ser provada no primeiro teste de persistência.
+- Compatibilidade verificada: MikroORM 7.2.9 funciona com Bun 1.4.4 nos testes de integração de schema e de persistência, contra o PostgreSQL 16 do docker compose. As entidades usam `defineEntity`, sem decorators.
+- Risco residual: o `em.fork()` explícito do `MikroOrmUnitOfWork` não está isolado por teste.
+  - O teste atual não o isola, porque os repositórios leem com `disableIdentityMap` e o `transactional()` já cria um fork internamente.
+  - Testes com três ou mais processos (Fase 8) provam isolamento entre processos, mas não necessariamente provam o em.fork(), porque cada processo tem o próprio EntityManager. Se for necessário provar o fork, a decisão fica para a Fase 8.
+  - Hoje, nenhum teste detecta a remoção do `em.fork()`.
 - O `ARCHITECTURE.md` deve repetir a justificativa (SPEC 16.2).
 
 ## Verificação
 - `test/unit/guards/guards.test.ts` (existe): a guarda `domain-imports` falha se `src/domain/` importar o MikroORM.
-- `test/integration/persistence/unit-of-work.test.ts` (a criar): atomicidade de wallet, ledger, inbox e outbox na mesma transação (SPEC 15.2).
-- `test/integration/persistence/round-trip.test.ts` (a criar): domínio → banco → domínio sem perda (SPEC, Parte 3, Fase 3).
+- `test/integration/persistence/unit-of-work.test.ts` (existe): atomicidade de wallet, transação e ledger na mesma transação. Inbox e outbox entram com a mensageria (SPEC 15.2).
+- `test/integration/persistence/round-trip.test.ts` (existe): domínio → banco → domínio sem perda (SPEC, Parte 3, Fase 3).
