@@ -253,10 +253,20 @@ Regra: RN-10. Implementação: Money.isZero() é válido; Wallet não altera sal
     - gravar next_reference_attempt_at e attempts = 0;
     - publicar WagerTransactionPendingReference.
 8.2 Worker ResolvePendingReference (forkEm por item):
-    SELECT ... FROM wager_transactions
-    WHERE status = 'PENDING_REFERENCE' AND next_reference_attempt_at <= now()
-    ORDER BY next_reference_attempt_at
-    LIMIT 50 FOR UPDATE SKIP LOCKED;
+    Candidatos, lidos sem lock:
+      SELECT id, wallet_id FROM wager_transactions
+      WHERE status = 'PENDING_REFERENCE' AND next_reference_attempt_at <= now()
+      ORDER BY next_reference_attempt_at
+      LIMIT 50;
+    Para cada candidato, numa transação ($1 = wallet_id; $2 = id):
+      SELECT ... FROM wallets WHERE id = $1 FOR UPDATE;
+      SELECT ... FROM wager_transactions
+      WHERE id = $2 AND status = 'PENDING_REFERENCE' AND next_reference_attempt_at <= now()
+      FOR UPDATE SKIP LOCKED;
+      Nenhuma linha: outro worker já tratou ou travou a pendência; pular.
+    A ordem é a mesma do fluxo principal (seção 5.5; RN-31): wallet primeiro,
+    depois wager_transactions, o que evita deadlock entre o resolvedor e o
+    fluxo principal.
     Para cada item, executa o MESMO caso de uso da seção 5, sob lock da wallet.
 8.3 Backoff exponencial: base 2 s, fator 2, teto 5 min, jitter de +/- 20%.
 8.4 Limite: 12 tentativas OU TTL de 24 h contadas a partir de created_at, o que vier primeiro (RN-12). Justificar no
