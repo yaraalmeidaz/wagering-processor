@@ -43,10 +43,32 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
-  # Ainda sem service containers de PostgreSQL e LocalStack (AGENTS.md seção 6).
+  # PostgreSQL real em service container (AGENTS.md seção 6). LocalStack ainda não.
   integration:
     needs: unit
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wagering
+          POSTGRES_USER: wagering
+          # Container efêmero do runner: autenticação trust, sem senha versionada (CLAUDE.md regra 5).
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wagering -d wagering"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: wagering
+      POSTGRES_USER: wagering
+      # Ignorada pela autenticação trust; existe porque o mikro-orm.config.ts exige a variável.
+      POSTGRES_PASSWORD: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
