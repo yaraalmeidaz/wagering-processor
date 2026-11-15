@@ -24,8 +24,8 @@ Cada regra indica sua origem:
 **RN-03.** Só pode existir uma wallet por par (playerId, currency). Criar wallet duplicada falha com `409 WALLET_ALREADY_EXISTS`. O saldo nunca fica negativo. A versão começa em 1 após a criação e incrementa somente quando o saldo muda.
 *Origem: enunciado §6.2 e §9 (criar wallet duplicada é conflito).*
 
-**RN-04.** `OPENING` é um tipo interno. Não entra pela API nem pela fila: na API, a requisição é rejeitada com `400 INVALID_PAYLOAD`; na fila, a mensagem é malformada e vai para a DLQ. Quando o saldo inicial é maior que zero, a wallet e o `OPENING` são criados na mesma transação SQL, com um lançamento de crédito. A versão é 1 após o `OPENING`.
-*Origem: enunciado §6.3 (OPENING é interno) e §9 (saldo inicial gera OPENING na mesma transação). A forma da rejeição é interpretação.*
+**RN-04.** `OPENING` é um tipo interno. Não entra pela API nem pela fila: na API, a requisição é rejeitada com `400 INVALID_PAYLOAD`; na fila, a mensagem é malformada e vai para a DLQ. Quando o saldo inicial é maior que zero, a wallet e o `OPENING` são criados na mesma transação SQL, com um lançamento de crédito. A versão é 1 após o `OPENING`. A criação com saldo inicial maior que zero gera `WagerTransactionProcessed` e `WalletBalanceChanged` (`walletVersion = 1`), gravados no outbox na mesma transação. Com saldo zero, nenhum evento é gerado.
+*Origem: enunciado §6.3 (OPENING é interno) e §9 (saldo inicial gera OPENING na mesma transação). A forma da rejeição e os eventos do OPENING são interpretação (ADR-0006).*
 
 ## Tipos de transação e efeito
 
