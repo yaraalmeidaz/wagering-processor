@@ -549,6 +549,7 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
 ==========================================================================
     POST /wallets                       { playerId, initialBalance{amount,currency} }
       Cria wallet e OPENING (se > 0) na mesma transação. Versão 1 após o OPENING.
+      O OPENING gera os eventos da RN-04, gravados no outbox na mesma transação.
     GET  /wallets/:walletId
     GET  /wallets/:walletId/ledger?cursor=...&limit=50   cursor opaco e estável
     GET  /wagering/transactions/:transactionId
