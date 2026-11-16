@@ -120,7 +120,7 @@ Números copiados da seção "Red team" do PR de cada fase. "Detectadas" conta o
 | 8. Concorrência | 3 | 3 | #17 |
 | 9. Observabilidade | não executado: fase não implementada | não executado | não implementada |
 | 10. Documentação | não executado: só documentação, sem código | não executado | #16 |
-| Núcleo financeiro, retroativo (domínio e schema das Fases 1 e 2) | 6 | 6 | ainda não aberto |
+| Núcleo financeiro, retroativo (domínio e schema das Fases 1 e 2) | 6 | 6 | #25 |
 
 Sobreviventes na primeira rodada, todas mortas por teste novo antes do merge:
 - **Fase 4:** 5 (a, b, c, g e M04).
