@@ -62,13 +62,14 @@ sequenceDiagram
 | 13 | `src/application/use-cases/apply-wager-rules.ts:101` |
 | 14 | `src/application/use-cases/apply-wager-rules.ts:102` |
 | 15 | `src/application/use-cases/apply-wager-rules.ts:104` |
-| 16 | fim do `transactional` em `src/infrastructure/persistence/mikro-orm-unit-of-work.ts:26` |
-| 17 e 18 | `src/application/use-cases/process-wager-transaction.ts:212` |
-| 19 | `src/infrastructure/persistence/postgres-outbox-publication-store.ts:60` |
+| 16 | `src/infrastructure/persistence/mikro-orm-unit-of-work.ts:42`, onde termina o callback do `transactional` aberto na linha 26 |
+| 17 | `src/application/use-cases/process-wager-transaction.ts:212` |
+| 18 | `src/interfaces/http/wagering.controller.ts:69` |
+| 19 | `src/infrastructure/persistence/postgres-outbox-publication-store.ts:56` a `:60` |
 | 20 | `src/infrastructure/persistence/postgres-outbox-publication-store.ts:67` a `:72` |
 | 21 e 22 | `src/infrastructure/messaging/outbox-publisher.ts:99` |
 | 23 | `src/infrastructure/messaging/outbox-publisher.ts:123` e `:124` |
-| 24 | fim do `transactional` em `src/infrastructure/persistence/postgres-outbox-publication-store.ts` |
+| 24 | `src/infrastructure/persistence/postgres-outbox-publication-store.ts:86`, onde termina o callback do `transactional` aberto na linha 56 |
 
 Esta referência é texto visível, e não um comentário HTML. O repositório não usa comentários HTML na documentação.
 
