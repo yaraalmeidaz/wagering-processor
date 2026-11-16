@@ -142,7 +142,7 @@ O número 0007 foi usado pela decisão de `PENDING_REFERENCE`, registrada antes 
 ### Classificação de erros (ADR-0007, ADR-0009, ADR-0010)
 
 - **Escolha:** três classes, tratadas por tipo de erro e não por mensagem (SPEC 9.1).
-  - **Rejeição de negócio:** é resultado persistido com `failureCode`, nunca exceção. Responde 422 no HTTP e ack na fila (RN-19).
+  - **Rejeição de negócio:** é resultado persistido com `failureCode`, nunca exceção. Responde 422 no HTTP e ack na fila (RN-19). A taxonomia dos códigos, com o significado e o que o provedor deve fazer em cada um, está em [docs/FAILURE-CODES.md](docs/FAILURE-CODES.md).
   - **Entrada malformada ou conflito de idempotência:** 400 ou 409 no HTTP, DLQ e ack na fila.
   - **Transitório e desconhecido:** 503 com `Retry-After` no HTTP; sem ack na fila, com backoff de visibilidade e redrive para a DLQ em `maxReceiveCount` 5.
 - **No resolvedor de pendências:**
