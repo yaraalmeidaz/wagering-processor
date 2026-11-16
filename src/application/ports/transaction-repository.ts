@@ -38,6 +38,11 @@ export interface TransactionRepository {
    * attempts e next_reference_attempt_at lidos em `expected`. Falso se a linha mudou.
    */
   postponeReferenceAttempt(expected: WagerTransaction, nextAttemptAt: Date): Promise<boolean>;
+  /**
+   * RN-41; ADR-0007: PENDING_REFERENCE -> FAILED sem reidratar a linha, porque o erro
+   * permanente pode ser justamente a linha que o domínio não aceita. Falso se não era pendência.
+   */
+  markPendingReferenceFailed(id: string, now: Date): Promise<boolean>;
   add(transaction: WagerTransaction): Promise<void>;
   update(transaction: WagerTransaction): Promise<void>;
 }

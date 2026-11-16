@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { PermanentDataError } from '../../../src/application/errors';
 import type { UnitOfWork } from '../../../src/application/ports/unit-of-work';
 import { Money } from '../../../src/domain/money';
 import { WagerTransaction } from '../../../src/domain/wager-transaction';
@@ -6,7 +7,8 @@ import { Wallet } from '../../../src/domain/wallet';
 import { MikroOrmUnitOfWork } from '../../../src/infrastructure/persistence/mikro-orm-unit-of-work';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 
-// SPEC 8.2; RN-12; ADR-0007: busca de pendências vencidas, releitura sob lock e adiamento com CAS.
+// SPEC 8.2; RN-12; RN-41; ADR-0007: busca de pendências vencidas, releitura sob lock,
+// adiamento com CAS, FAILED da pendência e tradução de erro permanente.
 const brl = (amount: string): Money => Money.create(amount, 'BRL');
 const ago = (ms: number) => new Date(Date.now() - ms);
 const ahead = (ms: number) => new Date(Date.now() + ms);
@@ -39,7 +41,11 @@ describe('consultas de PENDING_REFERENCE (SPEC 8.2)', () => {
     return wallet;
   }
 
-  function rollback(wallet: Wallet, nextAttemptAt: Date): WagerTransaction {
+  function rollback(
+    wallet: Wallet,
+    nextAttemptAt: Date,
+    overrides: { id?: string; walletId?: string } = {},
+  ): WagerTransaction {
     const externalTransactionId = `rb-${crypto.randomUUID()}`;
     const tx = WagerTransaction.create({
       id: crypto.randomUUID(),
@@ -55,6 +61,7 @@ describe('consultas de PENDING_REFERENCE (SPEC 8.2)', () => {
       money: brl('10.00'),
       referenceExternalTransactionId: `bet-${crypto.randomUUID()}`,
       createdAt: ago(HOUR),
+      ...overrides,
     });
     tx.markPendingReference(nextAttemptAt);
     return tx;
@@ -215,5 +222,63 @@ describe('consultas de PENDING_REFERENCE (SPEC 8.2)', () => {
     const reloaded = await uow.run(({ transactions }) => transactions.findById(stale.id));
     expect(reloaded?.attempts).toBe(1);
     expect(reloaded?.nextReferenceAttemptAt).toEqual(current.nextReferenceAttemptAt);
+  });
+  async function status(id: string) {
+    const [found] = await db.execute(
+      `SELECT status, failure_code, processed_at FROM wager_transactions WHERE id = ?`,
+      [id],
+    );
+    return {
+      status: String(found?.['status']),
+      failureCode: found?.['failure_code'] ?? null,
+      processedAt: found?.['processed_at'] ?? null,
+    };
+  }
+
+  test('FAILED da pendência: sem failureCode, mesmo com linha que o domínio não reidrata (RN-40, RN-41)', async () => {
+    const wallet = await seedWallet();
+    const pending = rollback(wallet, ago(1_000));
+    await save(pending);
+    // Dado gravado que o domínio recusa: moeda fora do padrão ISO-4217.
+    await db.execute(`UPDATE wager_transactions SET currency = 'br1' WHERE id = ?`, [pending.id]);
+    await expect(
+      uow.run(({ transactions }) => transactions.findById(pending.id)),
+    ).rejects.toThrow();
+
+    const failed = await uow.run(({ transactions }) =>
+      transactions.markPendingReferenceFailed(pending.id, new Date()),
+    );
+    expect(failed).toBe(true);
+    const after = await status(pending.id);
+    expect(after.status).toBe('FAILED');
+    expect(after.failureCode).toBeNull();
+    expect(after.processedAt).not.toBeNull();
+  });
+
+  test('FAILED da pendência: linha terminal não muda (RN-25)', async () => {
+    const wallet = await seedWallet();
+    const done = terminals(wallet);
+    await save(...done);
+    const before = await Promise.all(done.map((tx) => status(tx.id)));
+
+    const results = await uow.run(async ({ transactions }) =>
+      Promise.all(done.map((tx) => transactions.markPendingReferenceFailed(tx.id, new Date()))),
+    );
+    expect(results).toEqual([false, false, false]);
+    expect(await Promise.all(done.map((tx) => status(tx.id)))).toEqual(before);
+  });
+
+  test('classes 22 e 23 do PostgreSQL viram PermanentDataError (ADR-0007)', async () => {
+    const wallet = await seedWallet();
+    // 23503: wallet inexistente.
+    const orphan = rollback(wallet, ago(1_000), { walletId: crypto.randomUUID() });
+    await expect(uow.run(({ transactions }) => transactions.add(orphan))).rejects.toBeInstanceOf(
+      PermanentDataError,
+    );
+    // 22P02: id que não é uuid.
+    const invalid = rollback(wallet, ago(1_000), { id: 'não-é-uuid' });
+    await expect(uow.run(({ transactions }) => transactions.add(invalid))).rejects.toBeInstanceOf(
+      PermanentDataError,
+    );
   });
 });
