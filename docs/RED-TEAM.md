@@ -117,20 +117,32 @@ Números copiados da seção "Red team" do PR de cada fase. "Detectadas" conta o
 | 5. HTTP | 20 | 20 | #13 |
 | 6. Mensageria | 8 | 8 | #14 |
 | 7. Pending reference | 7 | 7 | #15 |
-| 8. Concorrência | não executado: não houve fase própria; os testes de concorrência entraram nas Fases 4, 6 e 7 | não executado | não houve PR própria |
+| 8. Concorrência | 3 | 3 | esta PR |
 | 9. Observabilidade | não executado: fase não implementada | não executado | não implementada |
-| 10. Documentação | não executado: só documentação, sem código | não executado | esta PR |
+| 10. Documentação | não executado: só documentação, sem código | não executado | #16 |
 
 Sobreviventes na primeira rodada, todas mortas por teste novo antes do merge:
 - **Fase 4:** 5 (a, b, c, g e M04).
 - **Fase 5:** 3 (g, i2 e i3).
 - **Fase 6:** nenhuma.
 - **Fase 7:** 1 (R6: `FAILED` gravado dentro da transação que falhou).
+- **Fase 8:** nenhuma.
+
+Fase 8, red team do caminho de escrita da wallet com três instâncias HTTP reais (`test/concurrency/http-three-instances.test.ts`). Cada mutação rodou contra as suítes completas de concorrência e de integração:
+
+| Mutação | Resultado |
+|---|---|
+| RT1. `findByIdForUpdate` sem `FOR UPDATE` | Detectada pelo cenário A: 4 respostas 201 e 56 respostas 503. O CAS manteve o ledger consistente, mas recusou a maior parte das apostas. Também falham 5 testes de concorrência e 5 de integração que dependem do lock |
+| RT2. `UPDATE` da wallet sem CAS por `version` | Não detectada pelos testes de concorrência, porque o `FOR UPDATE` serializa a carteira e o CAS só atua se o lock faltar (ADR-0003). Detectada pela integração, em `wallet-cas.test.ts` |
+| RT3. Sem `FOR UPDATE` e sem CAS | Detectada pelo cenário A: as 60 apostas de 3,00 receberam 201 sobre saldo de 100,00. O saldo gravado ficou 97,00 e o reconstruído pelo ledger, -80,00 |
+
+Os cenários B (mesma chave nas três instâncias) e C (reversões concorrentes da mesma referência) passaram com as três mutações: a idempotência e a reversão única estão garantidas por unicidades do schema, não pelo lock da wallet (ADR-0004; ADR-0005).
 
 Cobertura do catálogo M01 a M20. A correspondência foi feita pela descrição registrada em cada PR:
 - **Fase 4:** M04, M09, M12, M13, M14, M16, M17 e M19.
 - **Fase 5:** M20, o cursor sem desempate pelo `id`.
 - **Fase 6:** M11, M15 e M18.
 - **Fase 7:** M10, o evento fora da transação do efeito.
+- **Fase 8:** M03, o `FOR UPDATE` removido do caminho de escrita.
 
-Pendentes: M01, M02, M03, M05, M06, M07 e M08. Elas tocam o domínio, o schema e o lock do slow-path, que não tiveram red team nas Fases 1 a 3.
+Pendentes: M01, M02, M05, M06, M07 e M08. Elas tocam o domínio e o schema, que não tiveram red team nas Fases 1 e 2.
