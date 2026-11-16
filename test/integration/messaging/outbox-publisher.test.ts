@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import type { UnitOfWork } from '../../../src/application/ports/unit-of-work';
 import { ProcessWagerTransaction } from '../../../src/application/use-cases/process-wager-transaction';
 import type { OutboxMessage } from '../../../src/domain/outbox-message';
@@ -13,7 +13,7 @@ import { SystemClock } from '../../helpers/clock';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { createTestQueues, drainQueue, type TestQueues } from '../../helpers/sqs';
 import { betInput } from '../../helpers/wager-input';
-import { seedWallet } from '../../helpers/wallet-seed';
+import { ledgerInvariant, seedWallet } from '../../helpers/wallet-seed';
 
 // Enunciado §11; SPEC 11.3 a 11.5; ADR-0006; RN-30.
 describe('OutboxPublisher com LocalStack e PostgreSQL reais', () => {
@@ -39,10 +39,14 @@ describe('OutboxPublisher com LocalStack e PostgreSQL reais', () => {
     return { publisher, metrics, lines };
   };
 
+  /** Carteiras com apostas executadas no caso em andamento, conferidas no afterEach. */
+  const walletsWithBets: string[] = [];
+
   /** Wallet com `bets` apostas: 2 eventos por aposta no outbox (o seedWallet não gera eventos). */
   const walletWithEvents = async (bets: number) => {
     const wallet = await seedWallet(uow, '100.00');
     for (let i = 0; i < bets; i++) await useCase.execute(betInput(wallet, '1.00'));
+    walletsWithBets.push(wallet.id);
     return wallet;
   };
 
@@ -66,6 +70,15 @@ describe('OutboxPublisher com LocalStack e PostgreSQL reais', () => {
     uow = new MikroOrmUnitOfWork(db.orm.em);
     useCase = new ProcessWagerTransaction({ unitOfWork: uow, clock });
     queues = await createTestQueues('publisher');
+  });
+
+  // Invariante final de todo caso (SPEC 15.4): wallet.balance == saldo reconstruído pelo ledger.
+  afterEach(async () => {
+    for (const walletId of walletsWithBets.splice(0)) {
+      const invariant = await ledgerInvariant(db, walletId);
+      expect(invariant.consistent).toBe(true);
+      expect(invariant.stored).toBe(invariant.reconstructed);
+    }
   });
 
   afterAll(async () => {
