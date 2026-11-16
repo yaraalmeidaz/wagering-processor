@@ -21,7 +21,7 @@ export class HealthController {
     return { status: 'ok' };
   }
 
-  /** PostgreSQL e SQS (enunciado §9; ADR-0010). */
+  /** PostgreSQL e SQS (SPEC 13; ADR-0010). */
   @Get('ready')
   async ready(@Res({ passthrough: true }) response: StatusResponse) {
     const checks = await this.#readiness.check();

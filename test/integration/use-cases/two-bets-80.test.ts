@@ -6,7 +6,7 @@ import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { betInput } from '../../helpers/wager-input';
 import { ledgerDirections, ledgerInvariant, seedWallet } from '../../helpers/wallet-seed';
 
-// RN-32 (enunciado §8, Concorrência e ordenação): cenário obrigatório; SPEC, Parte 3, critério da Fase 4.
+// RN-32 (SPEC 15.3 b): cenário obrigatório; SPEC, Parte 3, critério da Fase 4.
 describe('duas BET de 80,00 em paralelo sobre saldo de 100,00', () => {
   let db: TestDatabase;
 

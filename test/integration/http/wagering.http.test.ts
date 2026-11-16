@@ -154,7 +154,7 @@ describe('HTTP: /wagering/transactions', () => {
     ['valor como number', { money: { amount: 10, currency: 'BRL' } }],
     ['valor com 3 casas', { money: { amount: '1.000', currency: 'BRL' } }],
     ['valor em notação científica', { money: { amount: '1e3', currency: 'BRL' } }],
-    ['kind OPENING (enunciado §6.3; RN-04)', { kind: 'OPENING' }],
+    ['kind OPENING (SPEC 3.3; RN-04)', { kind: 'OPENING' }],
     ['REFUND sem referência', { kind: 'REFUND' }],
   ])('%s: 400 INVALID_PAYLOAD', async (_, overrides) => {
     const wallet = await newWallet('10.00');
