@@ -18,3 +18,7 @@ export class InvalidWagerTransactionError extends DomainError {}
 
 /** Transição de estado fora da RN-25: erro de programação, não caminho de negócio. */
 export class InvalidTransactionStateError extends DomainError {}
+
+export class InvalidInboxMessageError extends DomainError {}
+
+export class InvalidOutboxMessageError extends DomainError {}
