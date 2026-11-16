@@ -70,6 +70,7 @@ Cada arquivo indica onde cada seta ou transição está no código e lista o que
 | [0008](docs/adr/0008-autenticacao-ponto-de-extensao.md) | aceita | Sem provedor de identidade. `AuthGuard` no-op nas rotas de negócio como ponto de extensão |
 | [0009](docs/adr/0009-contratos-http-e-mapeamento-de-erros.md) | aceita | Contratos HTTP, corpo de erro e mapeamento de status da SPEC 9.2 |
 | [0010](docs/adr/0010-consumidor-sqs-inbox-e-classificacao-de-erros.md) | aceita | Consumer SQS com inbox na transação do efeito e classificação entre ack, retry e DLQ |
+| [0011](docs/adr/0011-observabilidade-metricas-expostas-e-log-por-transacao.md) | proposta | Métricas da SPEC 14.2 em formato Prometheus, medidas num decorator do caso de uso e expostas em `GET /metrics`, e log JSON por transação |
 
 ### Numeração das ADRs em relação ao AGENTS.md §8
 
