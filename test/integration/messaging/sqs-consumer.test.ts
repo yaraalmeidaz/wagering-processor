@@ -266,7 +266,7 @@ describe('SqsWagerConsumer com LocalStack e PostgreSQL reais', () => {
     ).toBe(0);
   }, 20_000);
 
-  test('ROLLBACK antes da referência: PENDING_REFERENCE e ack, sem rejeição (enunciado §13 item 7)', async () => {
+  test('ROLLBACK antes da referência: PENDING_REFERENCE e ack, sem rejeição (SPEC 15.3 g; RN-12)', async () => {
     const wallet = await seedWallet(uow, '100.00');
     const data = dataOf(wallet, '10.00', {
       kind: 'ROLLBACK',

@@ -13,7 +13,7 @@ const PAYLOAD_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
  * Mensagem recebida da fila, deduplicada por (consumerName, messageId)
- * (enunciado §6.5 e §11; SPEC 10.2). Gravada na transação do efeito (ADR-0010).
+ * (SPEC 3.5 e 10.2). Gravada na transação do efeito (ADR-0010).
  */
 export class InboxMessage {
   readonly consumerName: string;

@@ -10,7 +10,7 @@ export interface ReadinessStatus {
   readonly sqs: DependencyStatus;
 }
 
-/** Verifica as dependências da readiness (AGENTS.md §10; enunciado §9; ADR-0010). */
+/** Verifica as dependências da readiness (AGENTS.md §10; SPEC 13; ADR-0010). */
 export interface ReadinessCheck {
   check(): Promise<ReadinessStatus>;
 }

@@ -47,7 +47,7 @@ export async function seedWallet(
 }
 
 /**
- * Invariante final de todo teste (enunciado §13, Testes obrigatórios; SPEC 15.4; AGENTS.md §9): o saldo da wallet é
+ * Invariante final de todo teste (SPEC 15.4; AGENTS.md §9): o saldo da wallet é
  * igual ao saldo reconstruído pelo ledger, sem usar balance_after.
  */
 export async function ledgerInvariant(

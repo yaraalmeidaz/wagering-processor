@@ -26,7 +26,7 @@ export const MESSAGES_DEAD_LETTERED = 'messages_dead_lettered_total';
 export interface ConsumerOptions {
   readonly sqs: SQSClient;
   readonly queues: { readonly input: string; readonly dlq: string };
-  /** O mesmo caso de uso da entrada HTTP (SPEC 5; enunciado §10). */
+  /** O mesmo caso de uso da entrada HTTP (SPEC 5 e 10.2). */
   readonly useCase: ProcessWagerTransaction;
   /** Só para a leitura rápida do inbox (SPEC 10.2, passo 2). */
   readonly unitOfWork: UnitOfWork;

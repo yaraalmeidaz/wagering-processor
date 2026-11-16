@@ -20,7 +20,7 @@ export type OutboxEnqueueInput = Pick<
 >;
 
 /**
- * Evento à espera de publicação (enunciado §6.5 e §11; SPEC 11.3). A ordem entre
+ * Evento à espera de publicação (SPEC 3.5 e 11.3). A ordem entre
  * eventos é do banco (seq), não da entidade (ADR-0006).
  */
 export class OutboxMessage {

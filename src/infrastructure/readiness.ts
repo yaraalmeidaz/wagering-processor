@@ -4,7 +4,7 @@ import type {
   ReadinessStatus,
 } from '../application/ports/readiness-check';
 
-/** PostgreSQL e SQS verificados em paralelo (enunciado §9; ADR-0010). */
+/** PostgreSQL e SQS verificados em paralelo (SPEC 13; ADR-0010). */
 export class CompositeReadinessCheck implements ReadinessCheck {
   readonly #postgres: DependencyCheck;
   readonly #sqs: DependencyCheck;

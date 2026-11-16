@@ -6,7 +6,7 @@ import { AuthGuard } from '../../../src/interfaces/http/auth.guard';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { type HttpApp, startHttpApp } from '../../helpers/http-app';
 
-// AGENTS.md §10; SPEC 13; ADR-0008, ADR-0009, ADR-0010; enunciado §9 (readiness com PostgreSQL e SQS).
+// AGENTS.md §10; SPEC 13; ADR-0008, ADR-0009, ADR-0010 (readiness com PostgreSQL e SQS).
 describe('HTTP: health e ponto de extensão de autenticação', () => {
   let db: TestDatabase;
 
