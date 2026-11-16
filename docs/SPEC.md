@@ -1,6 +1,6 @@
-# Distributed Wagering Processor: prompt revisado e fluxo do sistema
+# Distributed Wagering Processor: especificação técnica
 
-Base: prompt original (0612e4aa) + enunciado do desafio Jungle Gaming (1c48641c).
+Requisitos, fluxos, schema e contratos do serviço. As regras de negócio estão em [REGRAS-DE-NEGOCIO.md](REGRAS-DE-NEGOCIO.md), e as decisões em [adr/](adr/).
 
 ---
 
@@ -12,15 +12,15 @@ Ordenados por severidade. Os itens 1 a 2 são falhas financeiras e precisam ser 
 |---|---|---|---|
 | 1 | Crítica | O índice de reversão inclui `kind`. Um `REFUND` e um `ROLLBACK` podem reverter o mesmo `BET`, creditando duas vezes. Uma aposta de 25,00 gera +50,00. A regra 4 do desafio diz "pelo mesmo tipo", mas a invariante global diz "não duplicar créditos". | Índice único por `(provider_id, reference_external_transaction_id)` restrito a `kind IN ('REFUND','ROLLBACK')`. Documentar a decisão no `ARCHITECTURE.md`. |
 | 2 | Crítica | O replay de `LOSS` e de `BET` zero não tem lançamento no ledger. Logo, o "saldo da época" não pode ser lido do ledger. | Gravar um snapshot `resulting_balance` em `wager_transactions`, no momento do processamento. |
-| 3 | Alta | O prompt fala em `resulting_balance` na resposta. O contrato usa `balance`. | Contrato público: `balance`. O nome `resulting_balance` fica só na coluna interna. |
-| 4 | Alta | O prompt mistura "permanente de negócio" (REJECTED + ACK) com "permanente de infraestrutura" (DLQ, status FAILED). | Tabela explícita de três classes de erro (seção 9). |
+| 3 | Alta | A especificação inicial fala em `resulting_balance` na resposta. O contrato usa `balance`. | Contrato público: `balance`. O nome `resulting_balance` fica só na coluna interna. |
+| 4 | Alta | A especificação inicial mistura "permanente de negócio" (REJECTED + ACK) com "permanente de infraestrutura" (DLQ, status FAILED). | Tabela explícita de três classes de erro (seção 9). |
 | 5 | Alta | Busca sem lock não enxerga uma transação concorrente ainda não commitada. Duas requisições iguais colidem no INSERT e caem no 23505. | Fast-path sem lock só para replay terminal (PROCESSED ou REJECTED), com comparação de chave e hash. O restante: trava a wallet e busca de novo sob o lock. O 23505 fica como rede de segurança. ADR-0005. |
 | 6 | Alta | Se a rejeição de negócio for lançada como exceção, o rollback apaga o registro `REJECTED`. | Rejeição é resultado, não exceção. Persiste `REJECTED` no mesmo commit, sem tocar no saldo. |
 | 7 | Média | Não está definido o que acontece quando a mesma `(provider, external)` chega com outra `Idempotency-Key`. | Conflito: `409 IDEMPOTENCY_KEY_CONFLICT`. |
 | 8 | Média | Faltam as regras de referência: tipo permitido, valor igual, referência não `PROCESSED`, referência ausente. | Incluídas em RN-11 a RN-15 e na ordem de validação da seção 4.2. |
 | 9 | Média | Faltam `PENDING_REFERENCE` com TTL e backoff, taxonomia HTTP, outbox completa, DLQ, `SIGTERM`, reconciliação, health e métricas. | Incluídos nas seções 5 a 12. |
 | 10 | Média | A imutabilidade do ledger está só em código. | Trigger SQL bloqueando `UPDATE` e `DELETE`. |
-| 11 | Baixa | As regras de escala do `Money` (2 casas, rejeitar em vez de arredondar, sem notação científica) não estão no prompt. | Incluídas na seção 3. |
+| 11 | Baixa | As regras de escala do `Money` (2 casas, rejeitar em vez de arredondar, sem notação científica) não estão na especificação inicial. | Incluídas na seção 3. |
 | 12 | Decisão | O desafio não diz para qual fila vão os eventos do outbox. | Padrão adotado: `wager-events.fifo`, com `MessageGroupId = walletId`. |
 | 13 | Decisão | Com vários publishers, a ordem dos eventos de uma mesma carteira pode se inverter. | Publisher com advisory lock por agregado publica só o pendente mais antigo e espera a confirmação antes do próximo. Eventos de wallet carregam `walletVersion`. ADR-0006. |
 | 14 | Decisão | Não estava definido se `WIN` pode referenciar qualquer tipo e se precisa do mesmo valor. | `WIN` referencia só `BET` (RN-06), sem exigir valor igual, e não conta como reversão. `LOSS` aceita valor >= 0 sem efeito. |
