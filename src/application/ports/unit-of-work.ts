@@ -1,3 +1,4 @@
+import type { InboxRepository } from './inbox-repository';
 import type { LedgerRepository } from './ledger-repository';
 import type { OutboxRepository } from './outbox-repository';
 import type { TransactionRepository } from './transaction-repository';
@@ -9,6 +10,7 @@ export interface Repositories {
   readonly transactions: TransactionRepository;
   readonly ledger: LedgerRepository;
   readonly outbox: OutboxRepository;
+  readonly inbox: InboxRepository;
 }
 
 /**

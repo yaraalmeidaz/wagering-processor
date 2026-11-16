@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { MikroORM } from '@mikro-orm/postgresql';
+import { createSqsClient } from '../../../src/infrastructure/messaging/sqs-client';
 import { createOrmConfig } from '../../../src/infrastructure/persistence/mikro-orm.config';
 import { AuthGuard } from '../../../src/interfaces/http/auth.guard';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { type HttpApp, startHttpApp } from '../../helpers/http-app';
 
-// AGENTS.md §10; SPEC 13; ADR-0008, ADR-0009.
+// AGENTS.md §10; SPEC 13; ADR-0008, ADR-0009, ADR-0010; enunciado §9 (readiness com PostgreSQL e SQS).
 describe('HTTP: health e ponto de extensão de autenticação', () => {
   let db: TestDatabase;
 
@@ -35,10 +36,10 @@ describe('HTTP: health e ponto de extensão de autenticação', () => {
       expect(response.body).toEqual({ status: 'ok' });
     });
 
-    test('GET /health/ready: 200 com o PostgreSQL verificado', async () => {
+    test('GET /health/ready: 200 com PostgreSQL e SQS verificados', async () => {
       const response = await http.call('GET', '/health/ready');
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ status: 'ok', checks: { postgres: 'ok' } });
+      expect(response.body).toEqual({ status: 'ok', checks: { postgres: 'ok', sqs: 'ok' } });
     });
 
     test('rota inexistente: 404 NOT_FOUND', async () => {
@@ -55,11 +56,38 @@ describe('HTTP: health e ponto de extensão de autenticação', () => {
     try {
       const ready = await http.call('GET', '/health/ready');
       expect(ready.status).toBe(503);
-      expect(ready.body).toEqual({ status: 'unavailable', checks: { postgres: 'fail' } });
+      expect(ready.body).toEqual({
+        status: 'unavailable',
+        checks: { postgres: 'fail', sqs: 'ok' },
+      });
       expect((await http.call('GET', '/health/live')).status).toBe(200);
     } finally {
       await http.close();
       await orm.close(true);
+    }
+  }, 15_000);
+
+  test('GET /health/ready: 503 quando o SQS não responde (ADR-0010)', async () => {
+    // Porta sem SQS: o mesmo padrão do PostgreSQL, sem parar o LocalStack da suíte.
+    const unreachable = createSqsClient({
+      endpoint: 'http://127.0.0.1:1',
+      requestTimeoutMs: 1_000,
+    });
+    const http = await startHttpApp(db.orm, undefined, {
+      client: unreachable,
+      inputQueueUrl: 'http://127.0.0.1:1/000000000000/wager-transactions.fifo',
+    });
+    try {
+      const ready = await http.call('GET', '/health/ready');
+      expect(ready.status).toBe(503);
+      expect(ready.body).toEqual({
+        status: 'unavailable',
+        checks: { postgres: 'ok', sqs: 'fail' },
+      });
+      expect((await http.call('GET', '/health/live')).status).toBe(200);
+    } finally {
+      await http.close();
+      unreachable.destroy();
     }
   }, 15_000);
 

@@ -5,6 +5,7 @@ import {
   type IncomingIdempotency,
   type StoredIdempotency,
 } from '../../domain/idempotency';
+import { InboxMessage } from '../../domain/inbox-message';
 import type { Money, MoneyProps } from '../../domain/money';
 import { nextReferenceAttemptAt } from '../../domain/pending-reference-backoff';
 import { type ReferenceSnapshot, validateReference } from '../../domain/reference-rules';
@@ -50,6 +51,8 @@ export interface ProcessWagerInput {
   readonly money: { readonly amount: string; readonly currency: string };
   readonly referenceExternalTransactionId?: string | null;
   readonly correlationId?: string;
+  /** Só na entrada pela fila: gravada processada na transação do efeito (ADR-0010). */
+  readonly inbox?: InboxMessage;
 }
 
 export interface ProcessWagerResult {
@@ -84,6 +87,7 @@ interface ValidatedRequest {
   readonly money: Money;
   readonly referenceExternalTransactionId: string | null;
   readonly correlationId: string | undefined;
+  readonly inbox: InboxMessage | undefined;
 }
 
 /**
@@ -161,6 +165,10 @@ export class ProcessWagerTransaction {
       const wallet = await repositories.wallets.findByIdForUpdate(request.walletId);
       if (wallet === null) {
         throw new WalletNotFoundError(`wallet ${request.walletId} não encontrada`);
+      }
+      // SPEC 5.7 d; ADR-0010: inbox na mesma transação. Mesmo messageId de novo: 23505 (SPEC 5.9).
+      if (request.inbox !== undefined) {
+        await repositories.inbox.add(processedCopy(request.inbox, this.#clock.now()));
       }
       const existing = await findExisting(repositories.transactions, incoming, true);
       const decided = decide(existing, incoming, 'UNDER_LOCK');
@@ -397,5 +405,22 @@ function validate(input: ProcessWagerInput): ValidatedRequest {
     money,
     referenceExternalTransactionId: reference,
     correlationId: input.correlationId,
+    inbox: input.inbox,
   };
+}
+
+/**
+ * Cópia processada da mensagem recebida. Cada tentativa da unidade de trabalho grava
+ * a própria cópia, sem alterar a da entrada (ADR-0010).
+ */
+function processedCopy(received: InboxMessage, now: Date): InboxMessage {
+  const copy = InboxMessage.create({
+    consumerName: received.consumerName,
+    messageId: received.messageId,
+    payloadHash: received.payloadHash,
+    receivedAt: received.receivedAt,
+    processedAt: null,
+  });
+  copy.markProcessed(now);
+  return copy;
 }
