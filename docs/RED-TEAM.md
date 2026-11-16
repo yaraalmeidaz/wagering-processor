@@ -1,4 +1,4 @@
-# Red team de testes: fim de cada ciclo
+# Red team de testes: fim de cada fase
 
 ## Objetivo
 
@@ -8,60 +8,62 @@ Escopo: somente o código deste repositório, em ambiente local ou de CI. Não h
 
 ## Quando roda
 
-Como passo final de cada ciclo, depois dos commits de código e antes do PR.
+Como passo final de cada fase, depois dos commits de código e antes do PR.
 
 ## Onde roda
 
-Nunca na branch do ciclo. Use um worktree separado, para que nenhuma mutação possa vazar para um commit:
+Nunca na branch da fase. Use um worktree separado, para que nenhuma mutação possa vazar para um commit:
 
 ```bash
-git worktree add ../rt-cNN HEAD
-cd ../rt-cNN
+git worktree add ../rt-fase-NN HEAD
+cd ../rt-fase-NN
 ```
+
+O `.env` não é versionado e não vai para o worktree. Não o copie: os testes de integração leem o original com `bun --env-file=<caminho do .env do repositório> test ...`.
 
 Ao terminar, remova o worktree:
 
 ```bash
 cd ..
-git worktree remove rt-cNN
+git worktree remove rt-fase-NN
 ```
 
 ## Regras
 
 1. Cada mutação altera um único ponto do código e é desfeita antes da próxima.
-2. Depois de cada mutação, rode apenas os testes do ciclo, e depois a suíte completa se algum sobreviver.
+2. Depois de cada mutação, rode apenas os testes da fase, e depois a suíte completa se algum sobreviver.
 3. Mutação sobrevivente vira teste novo que a mata, em commit próprio feito pelo autor: `test(redteam): ...`.
 4. Mutação nunca é commitada. Antes de qualquer commit, `git diff` deve mostrar só testes.
 5. Não afrouxe asserção para que uma mutação deixe de ser detectada.
 
 ## Catálogo de mutações (invariantes da seção 2 do AGENTS.md)
 
-| # | Mutação | Teste que deve falhar |
+| # | Mutação | Cenário que deve detectar |
 |---|---|---|
-| M01 | Money aceita `NaN` ou `Infinity` | C02, validação de entrada |
-| M02 | Money arredonda em vez de rejeitar mais de 2 casas | C02, borda de escala |
-| M03 | Remover `FOR UPDATE` no slow-path | C06, cenário 80 + 80 |
-| M04 | Remover o re-check da idempotência sob o lock | C06, mesma chave em paralelo |
-| M05 | Trocar `<` por `<=` na checagem de saldo suficiente | C03, saldo igual à aposta |
-| M06 | Remover um dos 5 campos da validação de referência (ex.: `currency`) | C03, cada campo separadamente |
-| M07 | Incluir `kind` no índice de reversão | C04, REFUND + ROLLBACK no mesmo BET |
-| M08 | Remover trigger que bloqueia UPDATE no ledger | C04 |
-| M09 | Replay retorna `wallet.balance` atual em vez de `resulting_balance` | C06, replay da época |
-| M10 | Gravar o evento fora da transação | C09, evento invisível antes do commit |
-| M11 | Ack do SQS antes do commit | C10, crash entre commit e ack |
-| M12 | Versão da wallet incrementa em aposta de valor zero | C03 e C06, free spin |
-| M13 | Gravar lançamento de valor zero | C06, free spin sem ledger |
-| M14 | Remover `SET LOCAL lock_timeout` | C05 ou C06, espera limitada |
-| M15 | Inbox inserido pelo consumer fora da transação do caso de uso | C10, crash entre inbox e commit |
-| M16 | Emitir `WalletBalanceChanged` em LOSS | C06, evento correto por kind |
-| M17 | Reversão de WIN que deixa saldo negativo retorna `INSUFFICIENT_FUNDS` | C06, código de falha distinto |
-| M18 | Publisher sem lock por agregado | C09, dois publishers concorrentes |
-| M19 | Chave idempotente sem comparação de hash | C06, payload divergente |
-| M20 | Cursor do ledger sem desempate pelo `id` | C07, paginação com timestamps iguais |
+| M01 | Money aceita `NaN` ou `Infinity` | Money: entrada com `NaN` ou `Infinity` é rejeitada |
+| M02 | Money arredonda em vez de rejeitar mais de 2 casas | Money: valor com mais de 2 casas é rejeitado |
+| M03 | Remover `FOR UPDATE` no slow-path | Caso de uso: duas apostas de 80,00 com saldo de 100,00 |
+| M04 | Remover o re-check da idempotência sob o lock | Caso de uso: mesma chave em paralelo |
+| M05 | Trocar `<` por `<=` na checagem de saldo suficiente | Wallet: aposta igual ao saldo |
+| M06 | Remover um dos 5 campos da validação de referência (ex.: `currency`) | Regras de referência: cada campo do contexto separadamente |
+| M07 | Incluir `kind` no índice de reversão | Schema: `REFUND` e `ROLLBACK` sobre a mesma `BET` |
+| M08 | Remover trigger que bloqueia UPDATE no ledger | Schema: `UPDATE` e `DELETE` no ledger |
+| M09 | Replay retorna `wallet.balance` atual em vez de `resulting_balance` | Caso de uso: replay devolve o saldo da época |
+| M10 | Gravar o evento fora da transação | Outbox: evento invisível antes do commit |
+| M11 | Ack do SQS antes do commit | Consumer SQS: queda entre o commit e o ack |
+| M12 | Versão da wallet incrementa em aposta de valor zero | Wallet e caso de uso: aposta de valor zero |
+| M13 | Gravar lançamento de valor zero | Caso de uso: valor zero sem lançamento |
+| M14 | Remover `SET LOCAL lock_timeout` | Unidade de trabalho e caso de uso: espera de lock limitada |
+| M15 | Inbox inserido pelo consumer fora da transação do caso de uso | Consumer SQS: queda entre a inbox e o commit |
+| M16 | Emitir `WalletBalanceChanged` em LOSS | Caso de uso: evento correto por kind |
+| M17 | Reversão de WIN que deixa saldo negativo retorna `INSUFFICIENT_FUNDS` | Caso de uso: código de falha distinto |
+| M18 | Publisher sem lock por agregado | Publisher: dois ou mais publishers concorrentes |
+| M19 | Chave idempotente sem comparação de hash | Caso de uso: payload divergente |
+| M20 | Cursor do ledger sem desempate pelo `id` | HTTP: paginação do ledger com timestamps iguais |
 
 Mutações M01 a M20 são obrigatórias. Uma mutação só pode ficar sem teste com justificativa escrita no PR e aprovação sua.
 
-## Cenários adversariais por ciclo
+## Cenários adversariais por fase
 
 Além das mutações, o agente escreve testes para estes cenários de ataque ao próprio sistema. Cada um precisa de teste ou de decisão documentada.
 
@@ -83,10 +85,10 @@ Além das mutações, o agente escreve testes para estes cenários de ataque ao 
 
 ## Critério de saída
 
-- Todas as mutações M01 a M20 que se aplicam ao ciclo são detectadas.
+- Todas as mutações M01 a M20 que se aplicam à fase são detectadas.
 - Nenhuma mutação sobrevivente sem teste novo ou justificativa aprovada.
 - Cada cenário adversarial aplicável tem teste ou decisão documentada.
-- Nenhuma mutação foi commitada: `git log` do ciclo mostra apenas `feat`, `fix`, `refactor`, `test`, `docs` e `db`, e `test(redteam)` só para testes novos.
+- Nenhuma mutação foi commitada: `git log` da fase mostra apenas `feat`, `fix`, `refactor`, `test`, `docs` e `db`, e `test(redteam)` só para testes novos.
 
 ## Relatório no PR
 
@@ -100,3 +102,35 @@ Cole no corpo do PR:
 - Cenários adversariais cobertos: X de Y
 - Pendências com justificativa: ...
 ```
+
+## Registro por fase
+
+Números copiados da seção "Red team" do PR de cada fase. "Detectadas" conta o resultado final, depois dos testes `test(redteam)` escritos para as sobreviventes.
+
+| Fase | Mutações | Detectadas | PR |
+|---|---|---|---|
+| 0. Base | não executado: infraestrutura, CI, guards e helpers de teste, sem lógica de domínio | não executado | #1 a #6 |
+| 1. Domínio | não executado: ficou registrado como pendente no PR | não executado | #7, #8, #9 |
+| 2. Schema | não executado nesta fase | não executado | #10 |
+| 3. Persistência | não executado nesta fase | não executado | #11 |
+| 4. Caso de uso | 16 | 16 | #12 |
+| 5. HTTP | 20 | 20 | #13 |
+| 6. Mensageria | 8 | 8 | #14 |
+| 7. Pending reference | 7 | 7 | #15 |
+| 8. Concorrência | não executado: não houve fase própria; os testes de concorrência entraram nas Fases 4, 6 e 7 | não executado | não houve PR própria |
+| 9. Observabilidade | não executado: fase não implementada | não executado | não implementada |
+| 10. Documentação | não executado: só documentação, sem código | não executado | esta PR |
+
+Sobreviventes na primeira rodada, todas mortas por teste novo antes do merge:
+- **Fase 4:** 5 (a, b, c, g e M04).
+- **Fase 5:** 3 (g, i2 e i3).
+- **Fase 6:** nenhuma.
+- **Fase 7:** 1 (R6: `FAILED` gravado dentro da transação que falhou).
+
+Cobertura do catálogo M01 a M20. A correspondência foi feita pela descrição registrada em cada PR:
+- **Fase 4:** M04, M09, M12, M13, M14, M16, M17 e M19.
+- **Fase 5:** M20, o cursor sem desempate pelo `id`.
+- **Fase 6:** M11, M15 e M18.
+- **Fase 7:** M10, o evento fora da transação do efeito.
+
+Pendentes: M01, M02, M03, M05, M06, M07 e M08. Elas tocam o domínio, o schema e o lock do slow-path, que não tiveram red team nas Fases 1 a 3.
