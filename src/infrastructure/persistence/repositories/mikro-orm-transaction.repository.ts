@@ -2,6 +2,7 @@ import { LockMode } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type {
   FindOptions,
+  PendingReferenceCandidate,
   TransactionRepository,
 } from '../../../application/ports/transaction-repository';
 import type { WagerTransaction } from '../../../domain/wager-transaction';
@@ -53,6 +54,52 @@ export class MikroOrmTransactionRepository implements TransactionRepository {
       kind: { $in: ['REFUND', 'ROLLBACK'] },
     });
     return count > 0;
+  }
+
+  async findDueReferenceCandidates(limit: number): Promise<readonly PendingReferenceCandidate[]> {
+    this.#scope.assertActive();
+    // SQL da SPEC 8.2, conferido contra o PostgreSQL do compose; usa ix_wager_pending_reference.
+    const rows = await this.#em.execute(
+      `SELECT id, wallet_id FROM wager_transactions
+        WHERE status = 'PENDING_REFERENCE' AND next_reference_attempt_at <= now()
+        ORDER BY next_reference_attempt_at
+        LIMIT ?`,
+      [limit],
+    );
+    return (rows as { id: string; wallet_id: string }[]).map((row) => ({
+      id: row.id,
+      walletId: row.wallet_id,
+    }));
+  }
+
+  async findDuePendingForUpdate(id: string): Promise<WagerTransaction | null> {
+    this.#scope.assertActive();
+    const [locked] = await this.#em.execute(
+      `SELECT id FROM wager_transactions
+        WHERE id = ? AND status = 'PENDING_REFERENCE' AND next_reference_attempt_at <= now()
+        FOR UPDATE SKIP LOCKED`,
+      [id],
+    );
+    // A linha já está travada por esta transação; a leitura completa não espera.
+    return locked === undefined ? null : this.#findOne({ id }, {});
+  }
+
+  async postponeReferenceAttempt(
+    expected: WagerTransaction,
+    nextAttemptAt: Date,
+  ): Promise<boolean> {
+    this.#scope.assertActive();
+    const affected = await this.#em.nativeUpdate(
+      WagerTransactionOrmEntity,
+      {
+        id: expected.id,
+        status: 'PENDING_REFERENCE',
+        attempts: expected.attempts,
+        nextReferenceAttemptAt: expected.nextReferenceAttemptAt,
+      },
+      { nextReferenceAttemptAt: nextAttemptAt },
+    );
+    return affected === 1;
   }
 
   async add(transaction: WagerTransaction): Promise<void> {
