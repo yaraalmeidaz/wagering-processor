@@ -2,6 +2,7 @@
 import { MikroORM } from '@mikro-orm/postgresql';
 import { stdoutLogSink } from '../../observability/log-sink';
 import { InMemoryMetrics } from '../../observability/metrics';
+import { startMetricsServer } from '../../observability/metrics-server';
 import { OutboxPublisher } from '../messaging/outbox-publisher';
 import { createSqsClient, resolveQueueUrls } from '../messaging/sqs-client';
 import { createOrmConfig } from '../persistence/mikro-orm.config';
@@ -11,18 +12,22 @@ import { SystemClock } from '../system-clock';
 const orm = await MikroORM.init(createOrmConfig());
 const sqs = createSqsClient();
 const queues = await resolveQueueUrls(sqs);
+const metrics = new InMemoryMetrics();
+// ADR-0011: GET /metrics só com METRICS_PORT.
+const metricsServer = startMetricsServer(metrics);
 const publisher = new OutboxPublisher({
   store: new PostgresOutboxPublicationStore(orm),
   sqs,
   eventsQueueUrl: queues.events,
   clock: new SystemClock(),
-  metrics: new InMemoryMetrics(),
+  metrics,
   sink: stdoutLogSink,
 });
 
 // O ciclo em andamento termina com COMMIT ou ROLLBACK antes de o processo sair.
 process.once('SIGTERM', () => {
   void publisher.stop().then(async () => {
+    await metricsServer?.stop();
     sqs.destroy();
     await orm.close(true);
     process.exit(0);
