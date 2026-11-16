@@ -4,7 +4,7 @@ import { Money } from '../../../src/domain/money';
 import { WagerTransaction } from '../../../src/domain/wager-transaction';
 import { MikroOrmUnitOfWork } from '../../../src/infrastructure/persistence/mikro-orm-unit-of-work';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
-import { seedWallet } from '../../helpers/wallet-seed';
+import { ledgerInvariant, seedWallet } from '../../helpers/wallet-seed';
 
 // RN-30; ADR-0006: o evento é gravado no outbox na mesma transação do efeito.
 describe('OutboxRepository na unidade de trabalho', () => {
@@ -102,5 +102,10 @@ describe('OutboxRepository na unidade de trabalho', () => {
       [before.id],
     );
     expect(rows[0]).toEqual({ balance: '10.00', version: 1 });
+    expect(await ledgerInvariant(db, before.id)).toEqual({
+      stored: '10.00',
+      reconstructed: '10.00',
+      consistent: true,
+    });
   });
 });

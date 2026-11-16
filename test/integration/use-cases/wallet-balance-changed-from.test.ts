@@ -7,13 +7,21 @@ import { MikroOrmUnitOfWork } from '../../../src/infrastructure/persistence/mikr
 import { FakeClock } from '../../helpers/clock';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { betInput } from '../../helpers/wager-input';
-import { seedWallet } from '../../helpers/wallet-seed';
+import { ledgerInvariant, seedWallet } from '../../helpers/wallet-seed';
 
 // SPEC 11.2; RN-04, RN-28. Os casos de uso montam WalletBalanceChanged só pelo from.
 describe('WalletBalanceChanged vem de WalletBalanceChanged.from nos casos de uso', () => {
   let db: TestDatabase;
   let uow: UnitOfWork;
   let clock: FakeClock;
+
+  /** Invariante final (SPEC 15.4; AGENTS.md §9): saldo gravado igual ao reconstruído pelo ledger. */
+  const expectLedgerConsistent = async (walletId: string, amount: string) =>
+    expect(await ledgerInvariant(db, walletId)).toEqual({
+      stored: amount,
+      reconstructed: amount,
+      consistent: true,
+    });
   // Observa a implementação real: o evento continua sendo criado pelo from.
   const from = spyOn(WalletBalanceChanged, 'from');
 
@@ -55,6 +63,7 @@ describe('WalletBalanceChanged vem de WalletBalanceChanged.from nos casos de uso
     expect(entryArg?.balanceBefore.amount).toBe('0.00');
     const produced = from.mock.results[0]?.value as WalletBalanceChanged;
     expect(await storedPayloads(wallet.id)).toEqual([produced.toJSON()]);
+    await expectLedgerConsistent(wallet.id, '100.00');
   });
 
   test('ProcessWagerTransaction: o BET grava no outbox o evento produzido pelo from (RN-28)', async () => {
@@ -71,5 +80,6 @@ describe('WalletBalanceChanged vem de WalletBalanceChanged.from nos casos de uso
     const produced = from.mock.results[0]?.value as WalletBalanceChanged;
     // seedWallet grava o OPENING direto, sem caso de uso: só o evento do BET está no outbox.
     expect(await storedPayloads(wallet.id)).toEqual([produced.toJSON()]);
+    await expectLedgerConsistent(wallet.id, '70.00');
   });
 });

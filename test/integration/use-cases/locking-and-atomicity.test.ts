@@ -6,7 +6,7 @@ import { MikroOrmUnitOfWork } from '../../../src/infrastructure/persistence/mikr
 import { SystemClock } from '../../helpers/clock';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { betInput } from '../../helpers/wager-input';
-import { seedWallet } from '../../helpers/wallet-seed';
+import { ledgerInvariant, seedWallet } from '../../helpers/wallet-seed';
 
 /** Conta as unidades de trabalho executadas sobre a porta real, sem substituir o banco. */
 class CountingUnitOfWork implements UnitOfWork {
@@ -46,6 +46,14 @@ describe('lock, fast-path e atomicidade do ProcessWagerTransaction', () => {
   let uow: UnitOfWork;
   let useCase: ProcessWagerTransaction;
 
+  /** Invariante final (SPEC 15.4; AGENTS.md §9): saldo gravado igual ao reconstruído pelo ledger. */
+  const expectLedgerConsistent = async (walletId: string, amount: string) =>
+    expect(await ledgerInvariant(db, walletId)).toEqual({
+      stored: amount,
+      reconstructed: amount,
+      consistent: true,
+    });
+
   beforeAll(async () => {
     db = await createTestDatabase('usecase_locking');
     await db.orm.migrator.up();
@@ -75,6 +83,7 @@ describe('lock, fast-path e atomicidade do ProcessWagerTransaction', () => {
       holder.release();
       await holder.done;
     }
+    await expectLedgerConsistent(wallet.id, '9.00');
   }, 15_000);
 
   test('a wallet é travada antes da transação: sem deadlock com quem trava na mesma ordem (SPEC 8.2; ADR-0003)', async () => {
@@ -111,6 +120,7 @@ describe('lock, fast-path e atomicidade do ProcessWagerTransaction', () => {
         idempotentReplay: true,
       });
     }
+    await expectLedgerConsistent(wallet.id, '10.00');
   }, 15_000);
 
   test('replay de PENDING_REFERENCE é decidido pela releitura sob o lock, sem depender do 23505 (SPEC 5.5)', async () => {
@@ -129,6 +139,7 @@ describe('lock, fast-path e atomicidade do ProcessWagerTransaction', () => {
     // Fast-path (1) e slow-path (1). Sem a releitura sob o lock, o INSERT falharia
     // com 23505 e uma terceira unidade releria a linha (SPEC 5.9).
     expect(counting.runs).toBe(2);
+    await expectLedgerConsistent(wallet.id, '10.00');
   });
 
   test('falha no meio da unidade não deixa evento no outbox nem transação gravada (RN-30)', async () => {
@@ -165,6 +176,7 @@ describe('lock, fast-path e atomicidade do ProcessWagerTransaction', () => {
         [wallet.id],
       );
       expect(rows[0]).toEqual({ balance: '10.00', version: 1 });
+      await expectLedgerConsistent(wallet.id, '10.00');
     } finally {
       await db.execute(`DROP TRIGGER trg_fail_ledger ON wallet_ledger_entries`);
       await db.execute(`DROP FUNCTION fail_ledger_for_wallet()`);
