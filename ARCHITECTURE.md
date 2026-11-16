@@ -172,14 +172,8 @@ O número 0007 foi usado pela decisão de `PENDING_REFERENCE`, registrada antes 
   - Mudar isso altera a ADR-0007 e exige ADR nova antes do código.
 - **Métricas em memória, por processo.** Contadores e gauges não são agregados entre instâncias nem sobrevivem a reinício. A exportação faz parte da fase de observabilidade, que não foi implementada.
 - **Desempenho não medido.** Não há benchmark reproduzível no repositório, e nenhum número de vazão ou latência é afirmado (AGENTS.md §13). O script `test:load` existe, mas a pasta `test/load` ainda não tem testes.
-- **Fases 1 a 3 sem red team.** O mutation testing do domínio, do schema e da persistência não foi executado nessas fases. O red team da Fase 4 incluiu mutações em código do domínio (M12 e M13, na `Wallet`), mas o catálogo dessas três camadas não foi rodado inteiro. O registro está em [docs/RED-TEAM.md](docs/RED-TEAM.md#registro-por-fase).
-  Estas mutações do catálogo nunca foram executadas:
-  - **M01** (`Money` aceita `NaN` ou `Infinity`): é do domínio, e a Fase 1 não teve red team.
-  - **M02** (`Money` arredonda em vez de rejeitar mais de 2 casas): é do domínio, e a Fase 1 não teve red team.
-  - **M05** (`<` trocado por `<=` na checagem de saldo suficiente): é da `Wallet`, no domínio, e a Fase 1 não teve red team.
-  - **M06** (remover um campo da validação de contexto da referência): é das regras de referência do domínio, e a Fase 1 não teve red team. A Fase 4 mutou `WALLET_PLAYER_MISMATCH` e `CURRENCY_MISMATCH` no caso de uso, não a validação de contexto.
-  - **M07** (incluir `kind` no índice de reversão): é do schema, e a Fase 2 não teve red team.
-  - **M08** (remover o trigger que bloqueia `UPDATE` no ledger): é do schema, e a Fase 2 não teve red team.
+- **Fases 1 a 3 sem red team na própria fase.** O mutation testing do domínio, do schema e da persistência não foi executado nessas fases. O red team da Fase 4 incluiu mutações em código do domínio (M12 e M13, na `Wallet`).
+  As mutações do catálogo que tocam domínio e schema (M01, M02, M05, M06, M07 e M08) foram executadas depois, num red team retroativo do núcleo financeiro, e todas foram detectadas. Nenhuma mutação do catálogo M01 a M20 fica sem execução. O registro está em [docs/RED-TEAM.md](docs/RED-TEAM.md#registro-por-fase).
 
   A M03 (remover o `FOR UPDATE` do slow-path) foi executada no red team da Fase 8 e é detectada pelos testes com três instâncias HTTP. O registro está em [docs/RED-TEAM.md](docs/RED-TEAM.md#registro-por-fase).
 - **Autenticação é só ponto de extensão.** O `AuthGuard` aceita toda requisição. Não há provedor de identidade, e o `providerId` recebido não é autenticado (ADR-0008).

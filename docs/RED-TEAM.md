@@ -120,6 +120,7 @@ Números copiados da seção "Red team" do PR de cada fase. "Detectadas" conta o
 | 8. Concorrência | 3 | 3 | #17 |
 | 9. Observabilidade | não executado: fase não implementada | não executado | não implementada |
 | 10. Documentação | não executado: só documentação, sem código | não executado | #16 |
+| Núcleo financeiro, retroativo (domínio e schema das Fases 1 e 2) | 6 | 6 | ainda não aberto |
 
 Sobreviventes na primeira rodada, todas mortas por teste novo antes do merge:
 - **Fase 4:** 5 (a, b, c, g e M04).
@@ -127,6 +128,7 @@ Sobreviventes na primeira rodada, todas mortas por teste novo antes do merge:
 - **Fase 6:** nenhuma.
 - **Fase 7:** 1 (R6: `FAILED` gravado dentro da transação que falhou).
 - **Fase 8:** nenhuma.
+- **Núcleo financeiro, retroativo:** nenhuma.
 
 Fase 8, red team do caminho de escrita da wallet com três instâncias HTTP reais (`test/concurrency/http-three-instances.test.ts`). Cada mutação rodou contra as suítes completas de concorrência e de integração:
 
@@ -145,4 +147,19 @@ Cobertura do catálogo M01 a M20. A correspondência foi feita pela descrição 
 - **Fase 7:** M10, o evento fora da transação do efeito.
 - **Fase 8:** M03, o `FOR UPDATE` removido do caminho de escrita.
 
-Pendentes: M01, M02, M05, M06, M07 e M08. Elas tocam o domínio e o schema, que não tiveram red team nas Fases 1 e 2.
+- **Núcleo financeiro, retroativo:** M01, M02, M05, M06, M07 e M08.
+
+Pendentes: nenhuma.
+
+Red team retroativo do núcleo financeiro, para o domínio e o schema das Fases 1 e 2, executado em 2026-11-16 na branch `test/fase-10-redteam-nucleo`. O PR ainda não foi aberto. A execução foi numa cópia isolada do repositório, fora dele e sem o `.env`. Cada mutação foi aplicada sozinha, rodou contra a suíte inteira da camada (`test/unit` para o domínio, `test/integration` para o schema) e foi desfeita antes da próxima. Nenhuma sobreviveu, e nenhum teste foi escrito ou alterado.
+
+| Mutação | Ponto alterado | Teste que deveria detectar | Resultado | Detectada por |
+|---|---|---|---|---|
+| M01. `Money` aceita `NaN` ou `Infinity` | `parseCents` em `src/domain/money.ts` devolve `0n` para `"NaN"`, `"Infinity"` e `number` não finito | Money: entrada com `NaN` ou `Infinity` é rejeitada | Detectada: 3 falhas (`"NaN"`, `"Infinity"` e `NaN` como `number`) | `test/unit/domain/money.test.ts` |
+| M02. `Money` arredonda em vez de rejeitar mais de 2 casas | `INPUT_PATTERN` aceita casas além da segunda e as descarta, um arredondamento para zero | Money: valor com mais de 2 casas é rejeitado | Detectada: 1 falha (`"25.000"`) | `test/unit/domain/money.test.ts` |
+| M05. `<` trocado por `<=` no saldo suficiente | `Wallet.debit` recusa quando o saldo é menor ou igual ao valor | Wallet: aposta igual ao saldo | Detectada: 1 falha (débito do saldo exato deixa zero) | `test/unit/domain/wallet.test.ts` |
+| M06. Campo removido da validação de contexto | `sameContext` em `src/domain/reference-rules.ts` sem a moeda. Variantes, cada uma isolada: sem `playerId`, sem `walletId`, sem `roundId` | Regras de referência: cada campo do contexto separadamente | Detectada nas 4 versões: 1 falha em cada, no caso do campo removido | `test/unit/domain/reference-rules.test.ts` |
+| M07. `kind` no índice de reversão | `uq_wager_single_processed_reversal` com `kind` na chave, na migration | Schema: `REFUND` e `ROLLBACK` sobre a mesma `BET` | Detectada: 2 falhas | `test/integration/schema/reversal-unique-index.test.ts` e `test/integration/use-cases/resolve-pending-reference.test.ts` (rede de segurança do 23505) |
+| M08. Trigger do ledger sem bloquear `UPDATE` | `trg_ledger_append_only` como `BEFORE DELETE`, sem `UPDATE` | Schema: `UPDATE` e `DELETE` no ledger | Detectada: 1 falha (`UPDATE` falha pelo trigger) | `test/integration/schema/ledger-append-only.test.ts` |
+
+A M02 é detectada por um único caso, `"25.000"`, no teste unitário. A rejeição de 3 casas também aparece na integração HTTP (`"1.000"`), mas essa suíte não rodou contra as mutações de domínio.
