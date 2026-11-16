@@ -176,6 +176,75 @@ O número 0007 foi usado pela decisão de `PENDING_REFERENCE`, registrada antes 
 - **`FAILED` não publica evento.** A SPEC 11.1 não define evento para esse estado. A linha fica auditável no banco, e o replay responde `500 TRANSACTION_FAILED` (RN-41).
 - **Dado inválido responde 503 no HTTP.** Um erro da classe 22 ou 23 fora do resolvedor cai no ramo padrão do filtro HTTP, que trata o desconhecido como transitório. Na fila, a mensagem volta para retry até a DLQ.
 
+## Lacunas declaradas
+
+Pontos em que a entrega fica aquém do que a SPEC pede, ou em que o contrato difere do exemplo de referência. Cada item diz o que existe hoje e o que falta.
+
+### Desenho de autenticação (SPEC 13; ADR-0008)
+
+Hoje as rotas de negócio passam por um `AuthGuard` no-op, que aceita toda requisição. O `providerId` vem do corpo da requisição e não é autenticado (ADR-0008). O desenho que seria adotado:
+
+- **Provedor de identidade externo via OIDC.** Keycloak ou Zitadel no `docker-compose.yml`. Cada provedor de jogos é um cliente OIDC e obtém um access token JWT pelo fluxo de client credentials. O serviço não guarda usuário nem senha.
+- **Validação do JWT no `AuthGuard`.** O guard confere:
+  - a assinatura, pelas chaves JWKS do emissor, com cache e renovação na troca de chave;
+  - `iss`, `aud` e `exp`.
+  - Sem token ou com token inválido, a requisição é recusada antes do caso de uso.
+- **`providerId` vem do token, não do corpo.** O guard lê o `providerId` de uma claim do token e o entrega ao caso de uso. Um `providerId` no corpo diferente do token é recusado com `403 FORBIDDEN`, o código que a SPEC 13 já reserva para o guard. As regras de domínio continuam valendo sobre esse valor, como o contexto da referência (RN-14).
+- **O que não muda:** as rotas de health continuam abertas. A fila continua como canal interno confiável, e o `providerId` da mensagem continua sujeito às mesmas validações de domínio (ADR-0008).
+
+### Algoritmo do `payloadHash` (SPEC 5.2)
+
+- **Algoritmo:** SHA-256 em hex.
+- **Entrada:** um JSON canônico, com chaves ordenadas de forma recursiva, montado só com os campos de negócio da transação.
+- **O que fica fora:** o header `Idempotency-Key` e os metadados de transporte.
+- **Uso:** a mesma chave com hash diferente é conflito (`409 IDEMPOTENCY_PAYLOAD_MISMATCH`, RN-21), não replay.
+
+A lista exata de campos e a convenção da chave estão na SPEC 5.2. O hash da inbox usa a mesma função sobre o corpo inteiro da mensagem (ADR-0010).
+
+### Contrato de `POST /wallets` (ADR-0009)
+
+A resposta traz o identificador da carteira no campo `walletId`, não em `id` como no exemplo de referência. É uma decisão de contrato: a ADR-0009 fixa a resposta como `{ walletId, playerId, balance, version, createdAt, updatedAt }`.
+
+A ADR-0009 não registra o motivo do nome. O motivo é a consistência: `walletId` é o nome do mesmo identificador:
+- no corpo de `POST /wagering/transactions`;
+- na resposta das consultas de transação;
+- na reconciliação;
+- nos eventos `WalletBalanceChanged` e de transação.
+
+Um cliente lê o mesmo campo em todos os contratos.
+
+### Observabilidade (SPEC 14)
+
+Métricas exigidas pela SPEC 14.2 que não existem:
+- transações por status;
+- conflitos de lock (`55P03` ou conflito de CAS da wallet);
+- latência de processamento.
+
+Também é parcial a de duplicatas detectadas: só o consumer SQS conta (`messages_duplicate_total`), e o replay HTTP não conta.
+
+As métricas existentes, de retries, DLQ, outbox lag, publicação e divergência de reconciliação, ficam em memória, por processo. Não há endpoint de exposição nem agregação entre instâncias, e os valores zeram no reinício.
+
+O caminho HTTP não gera log JSON por transação. Os logs JSON existem no consumer, no publisher, no resolvedor e na reconciliação. Na API, só o filtro de erros registra o erro inesperado, em texto, pelo logger do NestJS.
+
+### Teste de carga
+
+O script `bun run test:load` existe, mas `test/load` ainda não tem cenários. O comando roda com `--pass-with-no-tests` e passa sem testar nada. Não há medição de vazão, latência, conflitos ou outbox lag.
+
+### Encerramento com SIGTERM
+
+Os três workers tratam o SIGTERM e saem com código 0 depois de terminar o item em andamento.
+
+A API também encerra, mas sai com código 143 (128 + 15, o número do SIGTERM). O `main.ts` chama `enableShutdownHooks()`, e o NestJS, ao receber o sinal, fecha a aplicação e depois reenvia o mesmo sinal ao próprio processo, em vez de chamar `process.exit(0)`. O encerramento não trava, mas um orquestrador que espere código 0 vai registrar a saída como término por sinal.
+
+### Falha real de infraestrutura
+
+Os testes simulam indisponibilidade:
+- PostgreSQL numa porta inválida;
+- SQS num endpoint inexistente;
+- `lock_timeout` real, com outra sessão segurando a wallet.
+
+Não há teste que derrube o PostgreSQL ou o SQS durante o processamento e prove a recuperação depois. O comportamento esperado é o da classificação de erros (ADR-0009, ADR-0010) e o da recuperação do outbox (ADR-0006), mas uma queda real no meio de uma transação não está coberta por teste.
+
 ## Decisões de projeto
 
 A tabela "Decisões de projeto" no início da [SPEC](docs/SPEC.md) registra os pontos que estavam em aberto ou incorretos quando o projeto começou e a correção adotada. Alguns exemplos:
