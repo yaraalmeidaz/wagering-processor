@@ -384,6 +384,9 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
 
 10.5 Redelivery não pode duplicar efeito. A inbox e a trava de reversão garantem isso.
 
+10.6 Classificação de erros da fila, hash do inbox, DLQ explícita, SIGTERM e
+    métricas da mensageria: ADR-0010.
+
 ==========================================================================
 11. TRANSACTIONAL OUTBOX
 ==========================================================================
@@ -455,12 +458,14 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
            UPDATE outbox_messages
            SET attempts = attempts + 1, next_attempt_at = now() + $3
            WHERE id = $2 AND published_at IS NULL;
-         ($3 = intervalo de backoff), depois COMMIT. O próximo ciclo tenta de novo.
+         ($3 = now() + intervalo de backoff), depois COMMIT. O próximo ciclo tenta de novo.
+         O publisher grava next_attempt_at já calculado por OutboxMessage.scheduleRetry,
+         com a fórmula da ADR-0007; depois de 12 falhas segue tentando no teto (ADR-0006).
     Duplicata: falha entre o ack e o COMMIT republica o evento. O SQS FIFO
     descarta a repetição com o mesmo MessageDeduplicationId dentro da janela de
     deduplicação de 5 minutos; depois dela, o consumidor deduplica por eventId
     e, nos eventos de wallet, compara walletVersion (seção 11.2).
-    Ordem: o próximo evento do agregado só é publicado depois do COMMIT do anterior. O teste de ordem é exigido pela Fase 8 (Concorrência) da Parte 3, com dois publishers.
+    Ordem: o próximo evento do agregado só é publicado depois do COMMIT do anterior. O teste de ordem roda com três publishers em processos separados (ADR-0006).
 
 11.4 Métrica outbox lag = agora - occurred_at do pendente mais antigo.
 
@@ -652,8 +657,8 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
       [A-Za-z0-9._:-]; ausente ou fora desse formato, o servidor gera um UUID.
     - Fora da tabela 9.2: rota inexistente 404 NOT_FOUND; AuthGuard negando 403 FORBIDDEN;
       erro desconhecido 503 TRANSIENT_FAILURE (seção 5.9).
-    - /health/ready: 200 { status: "ok", checks: { postgres: "ok" } } ou 503 com
-      status "unavailable". O SQS entra na verificação com a mensageria (Fase 6).
+    - /health/ready: 200 { status: "ok", checks: { postgres: "ok", sqs: "ok" } } ou 503
+      com status "unavailable" e a verificação que falhou (ADR-0010).
 
 ==========================================================================
 14. OBSERVABILIDADE
