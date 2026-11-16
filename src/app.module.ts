@@ -18,6 +18,7 @@ import { SystemClock } from './infrastructure/system-clock';
 import { AuthGuard } from './interfaces/http/auth.guard';
 import { HealthController } from './interfaces/http/health.controller';
 import { HttpErrorFilter } from './interfaces/http/http-error.filter';
+import { MetricsController } from './interfaces/http/metrics.controller';
 import {
   CLOCK,
   LOG_SINK,
@@ -53,7 +54,7 @@ export class AppModule {
     const deps = (unitOfWork: UnitOfWork, clock: Clock) => ({ unitOfWork, clock });
     return {
       module: AppModule,
-      controllers: [HealthController, WalletsController, WageringController],
+      controllers: [HealthController, MetricsController, WalletsController, WageringController],
       providers: [
         { provide: UNIT_OF_WORK, useFactory: () => new MikroOrmUnitOfWork(options.orm.em) },
         { provide: CLOCK, useValue: new SystemClock() },

@@ -4,7 +4,7 @@ import {
   type ExceptionFilter,
   HttpException,
   HttpStatus,
-  Logger,
+  Inject,
 } from '@nestjs/common';
 import {
   IdempotencyConflictError,
@@ -15,6 +15,10 @@ import {
   WalletNotFoundError,
   WalletVersionConflictError,
 } from '../../application/errors';
+import type { Clock } from '../../application/ports/clock';
+import { JsonLogger } from '../../observability/json-log';
+import type { LogSink } from '../../observability/log-sink';
+import { CLOCK, LOG_SINK } from './tokens';
 
 /** Idempotency-Key ausente ou vazia (RN-23). Erro da camada HTTP. */
 export class MissingIdempotencyKeyError extends Error {
@@ -45,7 +49,12 @@ export const RETRY_AFTER_SECONDS = '1';
  */
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
-  readonly #logger = new Logger('HttpErrorFilter');
+  readonly #log: JsonLogger;
+
+  /** Log JSON do erro inesperado, só com o nome da classe (ADR-0011; SPEC 14.1). */
+  constructor(@Inject(LOG_SINK) sink: LogSink, @Inject(CLOCK) clock: Clock) {
+    this.#log = new JsonLogger(sink, clock);
+  }
 
   catch(error: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<HttpResponse>();
@@ -84,7 +93,9 @@ export class HttpErrorFilter implements ExceptionFilter {
     if (error instanceof HttpException) {
       return this.#mapFramework(error);
     }
-    this.#logger.error(`erro inesperado tratado como transitório: ${String(error)}`);
+    this.#log.write('error', 'http_unexpected_error', {
+      error: error instanceof Error ? error.name : 'Unknown',
+    });
     return [503, { code: 'TRANSIENT_FAILURE', message: 'falha transitória, tente de novo' }];
   }
 
