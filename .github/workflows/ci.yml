@@ -43,7 +43,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
-  # PostgreSQL real em service container (AGENTS.md seção 6). LocalStack ainda não.
+  # PostgreSQL e LocalStack reais em service containers (AGENTS.md seção 6; ADR-0010).
   integration:
     needs: unit
     runs-on: ubuntu-latest
@@ -62,6 +62,21 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # LocalStack real (ADR-0010). O token vem do secret do repositório, nunca de arquivo versionado.
+      localstack:
+        image: localstack/localstack:2026.10.7
+        env:
+          SERVICES: sqs
+          AWS_DEFAULT_REGION: us-east-1
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "awslocal sqs list-queues"
+          --health-interval 5s
+          --health-timeout 15s
+          --health-retries 30
+          --health-start-period 30s
     env:
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: "5432"
@@ -69,6 +84,8 @@ jobs:
       POSTGRES_USER: wagering
       # Ignorada pela autenticação trust; existe porque o mikro-orm.config.ts exige a variável.
       POSTGRES_PASSWORD: ${{ github.run_id }}
+      SQS_ENDPOINT: http://127.0.0.1:4566
+      AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -77,7 +94,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test:integration
 
-  # Testes com 3 ou mais processos Bun reais (invariante 9 do AGENTS.md), contra PostgreSQL real.
+  # Testes com 3 ou mais processos Bun reais (invariante 9 do AGENTS.md), contra PostgreSQL e LocalStack reais.
   concurrency:
     needs: integration
     runs-on: ubuntu-latest
@@ -96,6 +113,21 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # LocalStack real (ADR-0010). O token vem do secret do repositório, nunca de arquivo versionado.
+      localstack:
+        image: localstack/localstack:2026.10.7
+        env:
+          SERVICES: sqs
+          AWS_DEFAULT_REGION: us-east-1
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "awslocal sqs list-queues"
+          --health-interval 5s
+          --health-timeout 15s
+          --health-retries 30
+          --health-start-period 30s
     env:
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: "5432"
@@ -103,6 +135,8 @@ jobs:
       POSTGRES_USER: wagering
       # Ignorada pela autenticação trust; existe porque o mikro-orm.config.ts exige a variável.
       POSTGRES_PASSWORD: ${{ github.run_id }}
+      SQS_ENDPOINT: http://127.0.0.1:4566
+      AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
