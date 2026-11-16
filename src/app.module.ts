@@ -29,6 +29,7 @@ import {
 } from './interfaces/http/tokens';
 import { WageringController } from './interfaces/http/wagering.controller';
 import { WalletsController } from './interfaces/http/wallets.controller';
+import { InstrumentedProcessWager } from './observability/instrumented-process-wager';
 import { type LogSink, stdoutLogSink } from './observability/log-sink';
 import { LoggingReconciliationMonitor } from './observability/logging-reconciliation-monitor';
 import { InMemoryMetrics, type Metrics } from './observability/metrics';
@@ -77,6 +78,17 @@ export class AppModule {
           useFactory: (uow: UnitOfWork, clock: Clock) =>
             new ProcessWagerTransaction(deps(uow, clock)),
           inject: [UNIT_OF_WORK, CLOCK],
+        },
+        {
+          provide: PROCESS_WAGER,
+          // ADR-0011: o mesmo ponto de medição do consumer SQS.
+          useFactory: (
+            useCase: ProcessWagerTransaction,
+            metrics: Metrics,
+            sink: LogSink,
+            clock: Clock,
+          ) => new InstrumentedProcessWager(useCase, { metrics, sink, clock }),
+          inject: [ProcessWagerTransaction, METRICS, LOG_SINK, CLOCK],
         },
         {
           provide: CreateWallet,

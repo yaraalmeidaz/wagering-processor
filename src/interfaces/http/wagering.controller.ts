@@ -11,13 +11,14 @@ import {
 } from '@nestjs/common';
 import { InvalidWagerInputError } from '../../application/errors';
 import { GetTransaction } from '../../application/use-cases/get-transaction';
-import {
-  type ProcessWagerResult,
-  ProcessWagerTransaction,
+import type {
+  ProcessWager,
+  ProcessWagerResult,
 } from '../../application/use-cases/process-wager-transaction';
 import { AuthGuard } from './auth.guard';
 import { MissingIdempotencyKeyError } from './http-error.filter';
 import { transactionJson, wagerResultJson } from './presenters';
+import { PROCESS_WAGER } from './tokens';
 
 interface StatusResponse {
   status(code: number): unknown;
@@ -27,11 +28,11 @@ interface StatusResponse {
 @Controller()
 @UseGuards(AuthGuard)
 export class WageringController {
-  readonly #process: ProcessWagerTransaction;
+  readonly #process: ProcessWager;
   readonly #getTransaction: GetTransaction;
 
   constructor(
-    @Inject(ProcessWagerTransaction) process: ProcessWagerTransaction,
+    @Inject(PROCESS_WAGER) process: ProcessWager,
     @Inject(GetTransaction) getTransaction: GetTransaction,
   ) {
     this.#process = process;
