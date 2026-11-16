@@ -9,7 +9,7 @@ import {
 import { IdempotencyConflictError, InvalidInputError } from '../../application/errors';
 import type { Clock } from '../../application/ports/clock';
 import type { UnitOfWork } from '../../application/ports/unit-of-work';
-import type { ProcessWagerTransaction } from '../../application/use-cases/process-wager-transaction';
+import type { ProcessWager } from '../../application/use-cases/process-wager-transaction';
 import { InboxMessage } from '../../domain/inbox-message';
 import { JsonLogger, type LogFields } from '../../observability/json-log';
 import type { LogSink } from '../../observability/log-sink';
@@ -27,7 +27,7 @@ export interface ConsumerOptions {
   readonly sqs: SQSClient;
   readonly queues: { readonly input: string; readonly dlq: string };
   /** O mesmo caso de uso da entrada HTTP (SPEC 5 e 10.2). */
-  readonly useCase: ProcessWagerTransaction;
+  readonly useCase: ProcessWager;
   /** Só para a leitura rápida do inbox (SPEC 10.2, passo 2). */
   readonly unitOfWork: UnitOfWork;
   readonly clock: Clock;

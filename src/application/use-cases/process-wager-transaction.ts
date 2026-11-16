@@ -51,6 +51,11 @@ export interface ProcessWagerResult {
   readonly idempotentReplay: boolean;
 }
 
+/** Contrato do caso de uso, para que HTTP e SQS aceitem um decorator (ADR-0011). */
+export interface ProcessWager {
+  execute(input: ProcessWagerInput): Promise<ProcessWagerResult>;
+}
+
 export interface ProcessWagerDependencies {
   readonly unitOfWork: UnitOfWork;
   readonly clock: Clock;
@@ -82,7 +87,7 @@ interface ValidatedRequest {
  * sem lock, slow-path sob lock da wallet, rejeição como resultado e tratamento
  * de 23505 da SPEC 5.9 e 6.3 (ADR-0003, ADR-0004, ADR-0005, ADR-0007).
  */
-export class ProcessWagerTransaction {
+export class ProcessWagerTransaction implements ProcessWager {
   readonly #uow: UnitOfWork;
   readonly #clock: Clock;
   readonly #random: () => number;
