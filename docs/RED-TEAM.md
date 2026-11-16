@@ -117,7 +117,7 @@ Números copiados da seção "Red team" do PR de cada fase. "Detectadas" conta o
 | 5. HTTP | 20 | 20 | #13 |
 | 6. Mensageria | 8 | 8 | #14 |
 | 7. Pending reference | 7 | 7 | #15 |
-| 8. Concorrência | 3 | 3 | esta PR |
+| 8. Concorrência | 3 | 3 | #17 |
 | 9. Observabilidade | não executado: fase não implementada | não executado | não implementada |
 | 10. Documentação | não executado: só documentação, sem código | não executado | #16 |
 
