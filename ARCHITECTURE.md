@@ -46,6 +46,16 @@ flowchart LR
 
 As regras de importação entre camadas estão no AGENTS.md §3, e o guard `domain-imports` confere a do domínio.
 
+## Diagramas
+
+| Diagrama | Conteúdo |
+|---|---|
+| [Componentes](docs/diagrams/componentes.md) | API, workers, filas SQS e PostgreSQL, com o tipo de comunicação em cada seta |
+| [Fluxo de uma BET pela API](docs/diagrams/fluxo-aposta.md) | Sequência da aposta até o COMMIT, e a publicação do evento pelo `worker:publisher` depois dele |
+| [Estados de WagerTransaction](docs/diagrams/estados-transacao.md) | Estados e transições do mapa `TRANSITIONS`, com os estados terminais |
+
+Cada arquivo indica onde cada seta ou transição está no código e lista o que difere da descrição original.
+
 ## Índice das ADRs
 
 | ADR | Status | Decisão |
