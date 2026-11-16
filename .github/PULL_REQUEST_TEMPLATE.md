@@ -1,11 +1,11 @@
-## Ciclo
-<!-- Ex.: C06, fase-06-caso-de-uso -->
+## Fase
+Fase e branch. Exemplo: Fase 6, `feat/fase-06-mensageria`.
 
 ## O que muda
-<!-- Uma ou duas frases. -->
+Uma ou duas frases.
 
 ## Por que
-<!-- Cite a ADR ou a seção do SPEC que justifica a mudança. -->
+Cite a ADR ou a seção da SPEC que justifica a mudança.
 
 ## Invariantes preservadas (AGENTS.md seção 2)
 - [ ] 1. Dinheiro sem number, float ou double

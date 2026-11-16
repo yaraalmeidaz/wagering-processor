@@ -35,5 +35,5 @@ Qual teste prova a decisão. Use o nome do arquivo de teste.
 
 Regras:
 - Não apague ADR aceita. Para mudar a decisão, crie uma nova ADR e marque a antiga como substituída.
-- Toda ADR nova entra no `ARCHITECTURE.md` na seção de decisões, no ciclo C13.
+- Toda ADR nova entra no índice de ADRs do `ARCHITECTURE.md`, no mesmo PR que a cria.
 - Se a decisão afeta uma invariante da seção 2 do AGENTS.md, a ADR precisa de aprovação explícita antes de qualquer código.
