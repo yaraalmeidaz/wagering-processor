@@ -13,8 +13,5 @@
 - Fase 6: mensageria com inbox, consumidor SQS, publisher do outbox e DLQ.
 - Fase 7: resolvedor de PENDING_REFERENCE com backoff e limite.
 - Fase 8: testes de concorrência com três instâncias HTTP reais.
+- Fase 9: observabilidade com métricas da SPEC 14.2 expostas em `GET /metrics`, log JSON por transação e erro inesperado do HTTP em JSON (ADR-0011).
 - Fase 10: documentação, ADRs, red team e README.
-
-### Não implementado
-
-- Fase 9: observabilidade completa. As métricas existem só em memória por processo e não são expostas.

@@ -58,7 +58,8 @@ Variáveis do `.env.example`:
 
 O código também lê duas variáveis que não estão no exemplo:
 - `POSTGRES_HOST`, que tem padrão `127.0.0.1`;
-- `PORT`, a porta HTTP da API, que tem padrão `3000`.
+- `PORT`, a porta HTTP da API, que tem padrão `3000`;
+- `METRICS_PORT`, opcional, a porta de `GET /metrics` de um worker em `127.0.0.1`. Sem ela, o worker não abre porta. Duas instâncias do mesmo worker na mesma máquina precisam de portas diferentes (ADR-0011).
 
 ## Subir o ambiente
 
@@ -99,6 +100,7 @@ O script de criação e `src/infrastructure/messaging/queues.ts` usam os mesmos 
 |---|---|
 | `GET /health/live` | Liveness, sem autenticação |
 | `GET /health/ready` | Readiness: verifica PostgreSQL e SQS, sem autenticação |
+| `GET /metrics` | Métricas da SPEC 14.2 no formato de texto do Prometheus, sem autenticação (ADR-0011) |
 | `POST /wallets` | Cria carteira, com `OPENING` interno quando o saldo inicial é maior que zero |
 | `GET /wallets/:walletId` | Consulta a carteira |
 | `GET /wallets/:walletId/ledger` | Ledger paginado por cursor |

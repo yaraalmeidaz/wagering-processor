@@ -70,7 +70,7 @@ Cada arquivo indica onde cada seta ou transição está no código e lista o que
 | [0008](docs/adr/0008-autenticacao-ponto-de-extensao.md) | aceita | Sem provedor de identidade. `AuthGuard` no-op nas rotas de negócio como ponto de extensão |
 | [0009](docs/adr/0009-contratos-http-e-mapeamento-de-erros.md) | aceita | Contratos HTTP, corpo de erro e mapeamento de status da SPEC 9.2 |
 | [0010](docs/adr/0010-consumidor-sqs-inbox-e-classificacao-de-erros.md) | aceita | Consumer SQS com inbox na transação do efeito e classificação entre ack, retry e DLQ |
-| [0011](docs/adr/0011-observabilidade-metricas-expostas-e-log-por-transacao.md) | proposta | Métricas da SPEC 14.2 em formato Prometheus, medidas num decorator do caso de uso e expostas em `GET /metrics`, e log JSON por transação |
+| [0011](docs/adr/0011-observabilidade-metricas-expostas-e-log-por-transacao.md) | aceita | Métricas da SPEC 14.2 em formato Prometheus, medidas num decorator do caso de uso e expostas em `GET /metrics`, e log JSON por transação |
 
 ### Numeração das ADRs em relação ao AGENTS.md §8
 
@@ -171,7 +171,7 @@ O número 0007 foi usado pela decisão de `PENDING_REFERENCE`, registrada antes 
   - Todos leem o lote na mesma ordem. Os outros esperam o lock da wallet que o vencedor segura, e depois encontram a linha já tratada.
   - A corretude não muda, mas mais resolvedores aumentam a disputa por lock em vez de dividir o trabalho.
   - Mudar isso altera a ADR-0007 e exige ADR nova antes do código.
-- **Métricas em memória, por processo.** Contadores e gauges não são agregados entre instâncias nem sobrevivem a reinício. A exportação faz parte da fase de observabilidade, que não foi implementada.
+- **Métricas por processo.** Cada instância expõe as próprias métricas: a API em `GET /metrics`, e cada worker em `GET /metrics` quando `METRICS_PORT` está definida. A soma entre instâncias fica com o coletor, e os valores zeram no reinício (ADR-0011).
 - **Desempenho não medido.** Não há benchmark reproduzível no repositório, e nenhum número de vazão ou latência é afirmado (AGENTS.md §13). O script `test:load` existe, mas a pasta `test/load` ainda não tem testes.
 - **Fases 1 a 3 sem red team na própria fase.** O mutation testing do domínio, do schema e da persistência não foi executado nessas fases. O red team da Fase 4 incluiu mutações em código do domínio (M12 e M13, na `Wallet`).
   As mutações do catálogo que tocam domínio e schema (M01, M02, M05, M06, M07 e M08) foram executadas depois, num red team retroativo do núcleo financeiro, e todas foram detectadas. Nenhuma mutação do catálogo M01 a M20 fica sem execução. O registro está em [docs/RED-TEAM.md](docs/RED-TEAM.md#registro-por-fase).
@@ -218,18 +218,13 @@ A ADR-0009 não registra o motivo do nome. O motivo é a consistência: `walletI
 
 Um cliente lê o mesmo campo em todos os contratos.
 
-### Observabilidade (SPEC 14)
+### Observabilidade (SPEC 14; ADR-0011)
 
-Métricas exigidas pela SPEC 14.2 que não existem:
-- transações por status;
-- conflitos de lock (`55P03` ou conflito de CAS da wallet);
-- latência de processamento.
-
-Também é parcial a de duplicatas detectadas: só o consumer SQS conta (`messages_duplicate_total`), e o replay HTTP não conta.
-
-As métricas existentes, de retries, DLQ, outbox lag, publicação e divergência de reconciliação, ficam em memória, por processo. Não há endpoint de exposição nem agregação entre instâncias, e os valores zeram no reinício.
-
-O caminho HTTP não gera log JSON por transação. Os logs JSON existem no consumer, no publisher, no resolvedor e na reconciliação. Na API, só o filtro de erros registra o erro inesperado, em texto, pelo logger do NestJS.
+As sete métricas da SPEC 14.2 existem e são expostas no formato Prometheus. A tabela de nomes está na ADR-0011. O que ainda fica aquém:
+- **`GET /metrics` sem autenticação.** Em produção, a proteção seria de rede, como nos endpoints de health.
+- **Outbox lag só no publisher.** A API não expõe esse gauge.
+- **Logs de inicialização do NestJS em texto.** As linhas por transação, por decisão do consumer e do publisher, por divergência de reconciliação e por erro inesperado no HTTP são JSON.
+- **A ligação do decorator no processo do consumer não tem teste de processo.** O teste sobe o consumer com o decorator em filas próprias (`test/integration/messaging/sqs-consumer.test.ts`), mas não o `sqs-consumer.main.ts`, que lê as filas fixas do ambiente.
 
 ### Teste de carga
 

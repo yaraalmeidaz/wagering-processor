@@ -672,6 +672,8 @@ Mensagem de entrada (enunciado §10): `type` = `WagerTransactionRequested`, `mes
 14.2 Métricas mínimas: transações por status; duplicatas detectadas; retries;
      mensagens em DLQ; conflitos de lock; outbox lag; latência de processamento.
 14.3 Health separado para liveness e readiness.
+14.4 Exposição: GET /metrics na API e, com METRICS_PORT, em cada worker, no
+     formato de texto do Prometheus; nomes e rótulos na ADR-0011.
 
 ==========================================================================
 15. TESTES

@@ -1,6 +1,6 @@
 # ADR-0011: Observabilidade com métricas expostas e log JSON por transação
 
-Status: proposta
+Status: aceita
 Data: 2026-11-16
 
 ## Contexto
@@ -35,7 +35,7 @@ Restrições:
   - Workers: servidor `Bun.serve` em `127.0.0.1`, só quando a variável `METRICS_PORT` está definida, com a mesma rota. Sem a variável, o worker não abre porta. O servidor fecha no SIGTERM, antes do `process.exit`.
 - **Log JSON por transação**, escrito pelo decorator, uma linha por execução:
   - `event: "wager_transaction_result"`, `level: "info"`, com `channel`, `correlationId`, `messageId` (só no canal `sqs`), `transactionId`, `walletId`, `providerId`, `kind`, `status`, `failureCode`, `idempotentReplay` e `durationMs`;
-  - `event: "wager_transaction_error"`, `level: "warn"` para conflito de idempotência e conflito de lock, `"error"` para os demais, com os mesmos identificadores disponíveis e o nome da classe do erro.
+  - `event: "wager_transaction_error"`, `level: "warn"` para conflito de idempotência, conflito de lock e payload inválido, `"error"` para os demais, com os mesmos identificadores disponíveis e o nome da classe do erro.
   - Ficam fora do log: `money`, saldo, `playerId` e o corpo da requisição.
 - **Filtro de erros HTTP:** o erro inesperado passa a ser registrado em JSON (`event: "http_unexpected_error"`, com o nome da classe do erro), pelo mesmo `JsonLogger`, em vez do logger em texto do NestJS.
 
@@ -61,4 +61,7 @@ Restrições:
 - `test/unit/observability/instrumented-process-wager.test.ts`: cada resultado e cada classe de erro incrementa a métrica certa com o canal certo, e a linha de log não contém `money`, saldo nem `playerId`.
 - `test/integration/http/metrics.http.test.ts` (PostgreSQL e LocalStack reais): uma BET e seu replay alteram `wager_transactions_total` e `wager_idempotent_replays_total` em `GET /metrics`, sem autenticação; uma BET com a wallet presa por outra sessão incrementa `wager_lock_conflicts_total{reason="lock_timeout"}`.
 - `test/integration/messaging/sqs-consumer.test.ts`: a mensagem processada pelo consumer conta com `channel="sqs"` e a linha de log traz o `messageId`.
-- `test/integration/workers/worker-metrics.test.ts`: com `METRICS_PORT`, o worker responde `GET /metrics`; sem a variável, não abre porta.
+- `test/unit/observability/metrics-server.test.ts`: sem `METRICS_PORT` não abre porta; valor inválido é erro; com a variável, responde `GET /metrics` e 404 fora da rota.
+- `test/integration/workers/worker-metrics.test.ts`: os processos reais do publisher e do resolvedor respondem `GET /metrics` com `METRICS_PORT` e fecham a porta no SIGTERM, saindo com 0.
+- `test/unit/observability/http-error-log.test.ts`: erro inesperado no HTTP responde 503 e escreve uma linha JSON só com o nome do erro.
+- Sem teste de processo: a ligação do decorator em `sqs-consumer.main.ts`, que lê as filas fixas do ambiente.
