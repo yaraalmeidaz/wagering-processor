@@ -127,6 +127,28 @@ describe('WagerTransaction: transições válidas (RN-25)', () => {
     );
   });
 
+  test('reagendar não muda o status, e a última tentativa sem referência rejeita (RN-12; ADR-0007)', () => {
+    const tx = pendingReference();
+    for (let attempt = 1; attempt <= 11; attempt += 1) {
+      tx.scheduleNextReferenceAttempt(new Date(T1.getTime() + attempt * 1_000));
+      expect(tx.status).toBe('PENDING_REFERENCE');
+    }
+    expect(tx.attempts).toBe(11);
+    tx.reject('REFERENCE_NOT_FOUND', brl('10.00'), T1);
+    expect(tx.status).toBe('REJECTED');
+    expect(tx.failureCode).toBe('REFERENCE_NOT_FOUND');
+    expect(tx.attempts).toBe(11);
+  });
+
+  test('pendência reagendada que encontra a referência vira PROCESSED com o id dela (SPEC 8.2)', () => {
+    const tx = pendingReference();
+    tx.scheduleNextReferenceAttempt(new Date('2026-01-01T00:00:05.000Z'));
+    tx.markProcessed(brl('110.00'), T1, 'bet-tx-id');
+    expect(tx.status).toBe('PROCESSED');
+    expect(tx.referenceTransactionId).toBe('bet-tx-id');
+    expect(tx.resultingBalance?.amount).toBe('110.00');
+  });
+
   test('resulting_balance em moeda diferente da transação é recusado', () => {
     expect(() => pending().markProcessed(Money.create('1.00', 'USD'), T1)).toThrow(
       InvalidWagerTransactionError,
