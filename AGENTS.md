@@ -267,8 +267,6 @@ Uma tarefa só está concluída quando:
 
 ## 13. Correções pendentes conhecidas
 
-- **Publisher do outbox (SPEC, seção 11.3):** a versão anterior filtrava `next_attempt_at` antes de ordenar, e assim publicava um evento posterior antes de um anterior em backoff. Também usava `hashtext(uuid)`, que não existe no PostgreSQL. Correção descrita na SPEC; a ordem é provada pelo teste do ciclo C09 (P09.4) e registrada na ADR-0006.
-- **ADR-0004:** precisa registrar o desvio de RN-16 em relação ao enunciado §7, regra 4.
 - **Medições de desempenho:** nenhuma foi feita. Não citar números sem benchmark reproduzível.
 
 Esta seção deve ser apagada quando as correções estiverem aplicadas e testadas.
