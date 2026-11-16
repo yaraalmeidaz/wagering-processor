@@ -307,12 +307,16 @@ Regra: RN-10. Implementação: Money.isZero() é válido; Wallet não altera sal
     A ordem é a mesma do fluxo principal (seção 5.5; RN-31): wallet primeiro,
     depois wager_transactions, o que evita deadlock entre o resolvedor e o
     fluxo principal.
-    Para cada item, executa o MESMO caso de uso da seção 5, sob lock da wallet.
+    Para cada item, executa o MESMO caminho de regras do caso de uso da seção 5, sob lock da wallet.
+    Erro transitório, 23505 de reversão e erro permanente (FAILED, RN-41): ADR-0007.
+    Worker em processo separado, com lote de 50, espera de 1 s sem pendência e SIGTERM: ADR-0007.
 8.3 Backoff exponencial: base 2 s, fator 2, teto 5 min, jitter de +/- 20%.
-8.4 Limite: 12 tentativas OU TTL de 24 h contadas a partir de created_at, o que vier primeiro (RN-12). Justificar no
-    ARCHITECTURE.md.
-8.5 Esgotado: REJECTED com REFERENCE_NOT_FOUND, e WagerTransactionRejected publicado.
-    A transição para REJECTED com REFERENCE_NOT_FOUND é feita pelo caso de uso da seção 5, sob lock da wallet, como o resolvedor da seção 8.2.
+8.4 Limite: 12 tentativas OU TTL de 24 h contadas a partir de created_at, o que vier primeiro (RN-12).
+    A tentativa que atinge o limite é a última, e procura a referência como as outras (ADR-0007).
+    Justificativa em ADR-0007, a levar para o ARCHITECTURE.md.
+8.5 Última tentativa: referência encontrada segue a seção 4.2 b a g; não encontrada vira REJECTED
+    com REFERENCE_NOT_FOUND, e WagerTransactionRejected é gravado no outbox na mesma transação.
+    A transição é feita pelo caminho de regras do caso de uso da seção 5, sob lock da wallet, como o resolvedor da seção 8.2.
 
 ==========================================================================
 9. ERROS, FAILURE CODES E HTTP
