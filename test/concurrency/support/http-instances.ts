@@ -3,10 +3,7 @@
  * (AGENTS.md §2.9 e §2.10). Sem mock de banco nem de fila.
  */
 import { createServer } from 'node:net';
-import { CreateQueueCommand, GetQueueUrlCommand, QueueDoesNotExist } from '@aws-sdk/client-sqs';
-import { DLQ_QUEUE, EVENTS_QUEUE, INPUT_QUEUE } from '../../../src/infrastructure/messaging/queues';
-import { createSqsClient } from '../../../src/infrastructure/messaging/sqs-client';
-import { testSqsEndpoint } from '../../helpers/sqs';
+import { ensureSpecQueues, testSqsEndpoint } from '../../helpers/sqs';
 
 const MAIN = new URL('../../../src/main.ts', import.meta.url);
 
@@ -57,26 +54,6 @@ function freePort(): Promise<number> {
   });
 }
 
-/**
- * O main.ts resolve as filas da SPEC 10.1 ao subir. No ambiente local o script do
- * LocalStack já as criou com os atributos dele; aqui só se cria a que faltar.
- */
-async function ensureQueues(): Promise<void> {
-  const sqs = createSqsClient({ endpoint: testSqsEndpoint() });
-  try {
-    for (const QueueName of [DLQ_QUEUE, INPUT_QUEUE, EVENTS_QUEUE]) {
-      try {
-        await sqs.send(new GetQueueUrlCommand({ QueueName }));
-      } catch (error) {
-        if (!(error instanceof QueueDoesNotExist)) throw error;
-        await sqs.send(new CreateQueueCommand({ QueueName, Attributes: { FifoQueue: 'true' } }));
-      }
-    }
-  } finally {
-    sqs.destroy();
-  }
-}
-
 async function isLive(baseUrl: string): Promise<boolean> {
   try {
     return (await fetch(`${baseUrl}/health/live`)).status === 200;
@@ -87,7 +64,7 @@ async function isLive(baseUrl: string): Promise<boolean> {
 
 /** Sobe `count` instâncias da API, cada uma num processo e numa porta, todas no banco `dbName`. */
 export async function startHttpInstances(dbName: string, count = 3): Promise<HttpInstances> {
-  await ensureQueues();
+  await ensureSpecQueues();
   const children: ReturnType<typeof Bun.spawn>[] = [];
   // stderr lido desde o início: um pipe cheio travaria o processo.
   const stderrs: Promise<string>[] = [];

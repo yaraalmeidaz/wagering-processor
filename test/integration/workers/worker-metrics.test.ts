@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
+import { ensureSpecQueues } from '../../helpers/sqs';
 
 // ADR-0011: os processos reais do publisher e do resolvedor expõem GET /metrics com METRICS_PORT.
 // O consumer usa as filas fixas do ambiente e não é subido aqui; a composição dele com o
@@ -42,6 +43,8 @@ describe('workers com METRICS_PORT (processo separado)', () => {
   beforeAll(async () => {
     db = await createTestDatabase('worker_metrics');
     await db.orm.migrator.up();
+    // O publisher resolve a fila de eventos ao subir, antes de abrir a porta de métricas.
+    await ensureSpecQueues();
   });
 
   afterAll(async () => {

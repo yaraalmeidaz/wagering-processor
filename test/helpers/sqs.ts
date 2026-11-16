@@ -7,12 +7,20 @@ import {
   DeleteMessageCommand,
   DeleteQueueCommand,
   GetQueueAttributesCommand,
+  GetQueueUrlCommand,
   type Message,
+  QueueDoesNotExist,
   ReceiveMessageCommand,
   SendMessageCommand,
   type SQSClient,
 } from '@aws-sdk/client-sqs';
-import { MAX_RECEIVE_COUNT, type QueueUrls } from '../../src/infrastructure/messaging/queues';
+import {
+  DLQ_QUEUE,
+  EVENTS_QUEUE,
+  INPUT_QUEUE,
+  MAX_RECEIVE_COUNT,
+  type QueueUrls,
+} from '../../src/infrastructure/messaging/queues';
 import { createSqsClient } from '../../src/infrastructure/messaging/sqs-client';
 
 /** LocalStack do docker compose, ou SQS_ENDPOINT quando definido (CI). */
@@ -20,6 +28,27 @@ export function testSqsEndpoint(): string {
   return (
     process.env['SQS_ENDPOINT'] ?? `http://127.0.0.1:${process.env['LOCALSTACK_PORT'] ?? '4566'}`
   );
+}
+
+/**
+ * Os processos reais (src/main.ts e o publisher) resolvem as filas da SPEC 10.1 ao subir.
+ * No ambiente local o script do LocalStack já as criou com os atributos dele; na CI o
+ * LocalStack sobe sem esse script, e aqui só se cria a que faltar.
+ */
+export async function ensureSpecQueues(): Promise<void> {
+  const sqs = createSqsClient({ endpoint: testSqsEndpoint() });
+  try {
+    for (const QueueName of [DLQ_QUEUE, INPUT_QUEUE, EVENTS_QUEUE]) {
+      try {
+        await sqs.send(new GetQueueUrlCommand({ QueueName }));
+      } catch (error) {
+        if (!(error instanceof QueueDoesNotExist)) throw error;
+        await sqs.send(new CreateQueueCommand({ QueueName, Attributes: { FifoQueue: 'true' } }));
+      }
+    }
+  } finally {
+    sqs.destroy();
+  }
 }
 
 export interface TestQueues extends QueueUrls {
