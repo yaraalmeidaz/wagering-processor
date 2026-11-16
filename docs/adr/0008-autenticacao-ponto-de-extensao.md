@@ -1,6 +1,6 @@
 # ADR-0008: Autenticação sem IdP, com AuthGuard no-op como ponto de extensão
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto
@@ -22,4 +22,4 @@ Não implementar provedor de identidade (IdP). As rotas de negócio passam por u
 
 ## Verificação
 - `test/integration/health-live.test.ts` (existe): `/health/live` responde 200 sem credenciais.
-- `test/integration/http/auth-guard.test.ts` (a criar): as rotas de negócio passam pelo `AuthGuard` no-op, e as rotas de health ficam fora dele.
+- `test/integration/http/health-and-auth.http.test.ts`: as rotas de negócio passam pelo `AuthGuard` no-op, e as rotas de health ficam fora dele.

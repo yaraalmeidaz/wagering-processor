@@ -1,6 +1,6 @@
 # ADR-0002: Representação de Money (string decimal e NUMERIC(19,2))
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto
@@ -25,5 +25,5 @@ A aritmética interna usa inteiros em centavos do tipo `bigint`, uma das duas op
 
 ## Verificação
 - `test/unit/guards/guards.test.ts` (existe): a guarda `money-number` falha com campo monetário tipado como `number`, `float` ou `double`.
-- `test/unit/domain/money.test.ts` (a criar): escala, rejeição de `NaN`, `Infinity`, notação científica, string vazia, mais de 2 casas, negativos e `"25"` (RN-02; SPEC 15.1).
-- `test/integration/persistence/round-trip.test.ts` (a criar): `Money` → `NUMERIC(19,2)` → `Money` sem perda.
+- `test/unit/domain/money.test.ts`: escala, rejeição de `NaN`, `Infinity`, notação científica, string vazia, mais de 2 casas, negativos e `"25"` (RN-02; SPEC 15.1).
+- `test/integration/persistence/round-trip.test.ts`: `Money` → `NUMERIC(19,2)` → `Money` sem perda.

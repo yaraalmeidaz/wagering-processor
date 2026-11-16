@@ -1,6 +1,6 @@
 # ADR-0006: Publisher do outbox por agregado
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto

@@ -1,6 +1,6 @@
 # ADR-0003: Lock pessimista por wallet com lock_timeout, e CAS por version
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto

@@ -1,6 +1,6 @@
 # ADR-0001: ORM (MikroORM) e estratégia transacional
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto
