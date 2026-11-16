@@ -8,6 +8,10 @@ import {
   SqsWagerConsumer,
 } from '../../../src/infrastructure/messaging/sqs-wager-consumer';
 import { MikroOrmUnitOfWork } from '../../../src/infrastructure/persistence/mikro-orm-unit-of-work';
+import {
+  InstrumentedProcessWager,
+  WAGER_TRANSACTIONS,
+} from '../../../src/observability/instrumented-process-wager';
 import { InMemoryMetrics } from '../../../src/observability/metrics';
 import { SystemClock } from '../../helpers/clock';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
@@ -126,6 +130,42 @@ describe('SqsWagerConsumer com LocalStack e PostgreSQL reais', () => {
       event: 'message_processed',
       messageId: body['messageId'],
       correlationId: body['messageId'],
+      walletId: wallet.id,
+      status: 'PROCESSED',
+    });
+    expect(lines.join('\n')).not.toContain('10.00');
+    expect((await ledgerInvariant(db, wallet.id)).consistent).toBe(true);
+  });
+
+  test('com o caso de uso instrumentado: canal sqs na métrica e messageId no log (ADR-0011)', async () => {
+    const wallet = await seedWallet(uow, '100.00');
+    const body = wagerMessage(dataOf(wallet, '10.00'));
+    await send(body, wallet.id);
+
+    const metrics = new InMemoryMetrics();
+    const lines: string[] = [];
+    const sink = { write: (line: string) => lines.push(line) };
+    const { consumer } = consumerWith({
+      metrics,
+      sink,
+      useCase: new InstrumentedProcessWager(
+        new ProcessWagerTransaction({ unitOfWork: uow, clock }),
+        {
+          metrics,
+          sink,
+          clock,
+        },
+      ),
+    });
+    expect(await consumer.pollOnce()).toBe(1);
+
+    expect(metrics.value(WAGER_TRANSACTIONS, { channel: 'sqs', status: 'PROCESSED' })).toBe(1);
+    const result = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((record) => record['event'] === 'wager_transaction_result');
+    expect(result).toMatchObject({
+      channel: 'sqs',
+      messageId: body['messageId'],
       walletId: wallet.id,
       status: 'PROCESSED',
     });
