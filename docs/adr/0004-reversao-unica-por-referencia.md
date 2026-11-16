@@ -1,6 +1,6 @@
 # ADR-0004: Reversão única por referência, sem kind no índice
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto
@@ -31,6 +31,6 @@ A chave não inclui `kind`. Se a transição para `PROCESSED` disparar o índice
 - Quando o `23505` acontece: nos fluxos atuais, nunca. Uma reversão só chega a `PROCESSED` com o mesmo contexto da referência, inclusive a wallet (RN-14), então toda reversão processada de um par `(provider_id, reference_external_transaction_id)` está na mesma wallet. O fluxo principal e o resolvedor de pendências travam essa wallet antes de checar a RN-16 (ADR-0003; SPEC 8.2), e a segunda reversão já enxerga a primeira e é rejeitada pelo caminho normal. O tratamento do `23505` é rede de segurança para o que escapar dessa cadeia: um caminho futuro que grave `PROCESSED` sem o lock da wallet, uma divergência entre a validação em memória e o índice, ou uma escrita fora da aplicação. O teste do `23505` grava de propósito um estado que os fluxos não produzem.
 
 ## Verificação
-- `test/integration/schema/reversal-unique-index.test.ts` (a criar): `REFUND` e `ROLLBACK` processados sobre a mesma `BET` falham no índice (SPEC 15.2; Parte 3, Fase 2).
-- `test/unit/domain/reference-validation.test.ts` (a criar): segunda reversão rejeitada com `REFERENCE_ALREADY_REVERSED`, e `WIN` com referência não ocupa o slot (RN-06, RN-16).
+- `test/integration/schema/reversal-unique-index.test.ts`: `REFUND` e `ROLLBACK` processados sobre a mesma `BET` falham no índice (SPEC 15.2; Parte 3, Fase 2).
+- `test/unit/domain/reference-rules.test.ts`: segunda reversão rejeitada com `REFERENCE_ALREADY_REVERSED`, por qualquer tipo, e `WIN` com referência não conta como reversão (RN-06, RN-16).
 - `test/integration/use-cases/resolve-pending-reference.test.ts`: rede de segurança do resolvedor. Uma reversão `PROCESSED` gravada em outra wallet entre a checagem da RN-16 e o `UPDATE` dispara o índice, e a pendência vira `REJECTED` com `REFERENCE_ALREADY_REVERSED` em transação nova, sem crédito.

@@ -1,6 +1,6 @@
 # ADR-0009: Contratos HTTP e mapeamento de erros
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto

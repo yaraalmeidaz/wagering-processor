@@ -1,6 +1,6 @@
 # ADR-0005: Idempotência com fast-path terminal sem lock e slow-path sob lock
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto

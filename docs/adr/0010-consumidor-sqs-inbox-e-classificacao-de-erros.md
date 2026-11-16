@@ -1,6 +1,6 @@
 # ADR-0010: Consumidor SQS, inbox e classificação de erros
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto

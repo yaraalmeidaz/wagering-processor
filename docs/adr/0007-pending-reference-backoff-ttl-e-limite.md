@@ -1,6 +1,6 @@
 # ADR-0007: PENDING_REFERENCE com backoff, TTL e limite de tentativas
 
-Status: proposta
+Status: aceita
 Data: 2026-11-15
 
 ## Contexto
