@@ -27,6 +27,14 @@ Documentos de referência:
 - **Docker com o plugin Compose.**
 - **Token de autenticação do LocalStack:** a imagem do `docker-compose.yml` exige `LOCALSTACK_AUTH_TOKEN`.
 
+### Como obter o `LOCALSTACK_AUTH_TOKEN`
+
+Sem o token, o `docker compose up` não sobe: o compose recusa iniciar o LocalStack com a variável vazia. Sem o LocalStack, as suítes `test:integration` e `test:concurrency` não rodam.
+
+1. Crie uma conta gratuita no site do LocalStack. Segundo o LocalStack, o plano gratuito é para uso não comercial; confira as condições atuais na página de preços.
+2. Copie o auth token nas configurações da conta.
+3. Coloque o token na variável `LOCALSTACK_AUTH_TOKEN` do `.env`, criado a partir do `.env.example` (seção Configuração). O `.env` não é versionado: não commite o token.
+
 ## Configuração
 
 Copie o exemplo e preencha os valores locais. O `.env` não é versionado.
@@ -100,6 +108,8 @@ O script de criação e `src/infrastructure/messaging/queues.ts` usam os mesmos 
 | `GET /providers/:providerId/wagering/transactions/:externalTransactionId` | Consulta pelo id do provedor |
 
 Contratos e códigos de status: SPEC 9.2, SPEC 13 e ADR-0009.
+
+**Código de saída no SIGTERM:** a API encerra, mas sai com código 143 (128 + 15, o número do SIGTERM), e não 0. O `main.ts` chama `enableShutdownHooks()`, e o NestJS, ao receber o sinal, fecha a aplicação e reenvia o mesmo sinal ao próprio processo. Os três workers saem com código 0 depois de terminar o item em andamento. Um orquestrador que espere código 0 da API vai registrar a saída como término por sinal (ARCHITECTURE.md, "Encerramento com SIGTERM").
 
 ### Workers
 
