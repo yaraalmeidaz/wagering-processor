@@ -8,15 +8,9 @@ import {
 import { InboxMessage } from '../../domain/inbox-message';
 import type { Money, MoneyProps } from '../../domain/money';
 import { nextReferenceAttemptAt } from '../../domain/pending-reference-backoff';
-import { type ReferenceSnapshot, validateReference } from '../../domain/reference-rules';
-import {
-  balanceEffect,
-  type ExternalKind,
-  insufficientBalanceFailureCode,
-  isExternalKind,
-} from '../../domain/wager-kind';
+import { type ExternalKind, isExternalKind } from '../../domain/wager-kind';
 import { type TransactionStatus, WagerTransaction } from '../../domain/wager-transaction';
-import type { BalanceResult, Wallet } from '../../domain/wallet';
+import type { Wallet } from '../../domain/wallet';
 import {
   IdempotencyConflictError,
   InvalidWagerInputError,
@@ -24,20 +18,13 @@ import {
   UniqueViolationError,
   WalletNotFoundError,
 } from '../errors';
-import {
-  type IntegrationEvent,
-  outboxRecordOf,
-  transactionEventData,
-  WagerTransactionPendingReference,
-  WagerTransactionProcessed,
-  WagerTransactionRejected,
-  WalletBalanceChanged,
-} from '../events';
+import { transactionEventData, WagerTransactionPendingReference } from '../events';
 import { requiredMoney, requiredText, requiredUuid } from '../input';
 import { payloadHash } from '../payload-hash';
 import type { Clock } from '../ports/clock';
 import type { TransactionRepository } from '../ports/transaction-repository';
 import type { Repositories, UnitOfWork } from '../ports/unit-of-work';
+import { applyWagerRules, emitWagerEvent, type WagerRuleContext } from './apply-wager-rules';
 
 export interface ProcessWagerInput {
   readonly idempotencyKey: string;
@@ -184,7 +171,6 @@ export class ProcessWagerTransaction {
     forcedFailure: FailureCode | null,
   ): Promise<ProcessWagerResult> {
     const now = this.#clock.now();
-    const expectedVersion = wallet.version;
     const transaction = WagerTransaction.create({
       id: crypto.randomUUID(),
       providerId: request.providerId,
@@ -200,96 +186,31 @@ export class ProcessWagerTransaction {
       referenceExternalTransactionId: request.referenceExternalTransactionId,
       createdAt: now,
     });
-    const emit = (event: IntegrationEvent<object>) =>
-      repositories.outbox.append(outboxRecordOf(event));
-    const context = () => ({
-      eventId: crypto.randomUUID(),
-      aggregateId: wallet.id,
+    const rules: WagerRuleContext = {
+      repositories,
+      wallet,
+      transaction,
       correlationId: request.correlationId ?? transaction.id,
-      occurredAt: now,
-    });
-
-    // Rejeição de negócio é resultado persistido, não exceção (RN-19, RN-27).
-    const reject = async (failureCode: FailureCode) => {
-      // Saldo em outra moeda não cabe na coluna currency da transação (SPEC 12): sem snapshot.
-      const snapshot = wallet.balance.hasSameCurrency(request.money) ? wallet.balance : null;
-      transaction.reject(failureCode, snapshot, now);
-      await repositories.transactions.add(transaction);
-      await emit(new WagerTransactionRejected(context(), transactionEventData(transaction)));
-      return resultOf(transaction, false);
+      now,
+      persist: (created) => repositories.transactions.add(created),
     };
 
-    if (forcedFailure !== null) return reject(forcedFailure);
-    // SPEC 4.3: estes dois vêm antes da referência, porque não exigem leitura adicional.
-    if (!wallet.belongsTo(request.playerId)) return reject('WALLET_PLAYER_MISMATCH');
-    if (request.money.currency !== wallet.currency) return reject('CURRENCY_MISMATCH');
-
-    let referenced: WagerTransaction | null = null;
-    const reference = request.referenceExternalTransactionId;
-    // RN-42: BET e LOSS não aceitam referência.
-    if (reference !== null && !hasReferenceRule(request.kind)) {
-      return reject('REFERENCE_KIND_NOT_ALLOWED');
-    }
-    if (reference !== null) {
-      const found = await repositories.transactions.findByProviderAndExternalId(
-        request.providerId,
-        reference,
-      );
-      const isReversal = request.kind === 'REFUND' || request.kind === 'ROLLBACK';
-      const check = validateReference({
-        transaction: {
-          kind: request.kind,
-          playerId: request.playerId,
-          walletId: request.walletId,
-          roundId: request.roundId,
-          money: request.money,
-        },
-        reference: found === null ? null : snapshotOf(found),
-        referenceAlreadyReversed: isReversal
-          ? await repositories.transactions.hasProcessedReversal(request.providerId, reference)
-          : false,
-      });
-      if (check.outcome === 'PENDING_REFERENCE') {
-        // SPEC 8.1; RN-12, RN-29; ADR-0007.
-        transaction.markPendingReference(nextReferenceAttemptAt(now, 1, this.#random));
-        await repositories.transactions.add(transaction);
-        await emit(
-          new WagerTransactionPendingReference(context(), {
+    const outcome = await applyWagerRules(rules, forcedFailure);
+    if (outcome === 'REFERENCE_MISSING') {
+      // SPEC 8.1; RN-12, RN-29; ADR-0007.
+      transaction.markPendingReference(nextReferenceAttemptAt(now, 1, this.#random));
+      await rules.persist(transaction);
+      await emitWagerEvent(
+        rules,
+        (context) =>
+          new WagerTransactionPendingReference(context, {
             ...transactionEventData(transaction),
             nextReferenceAttemptAt: transaction.nextReferenceAttemptAt?.toISOString() ?? null,
           }),
-        );
-        return resultOf(transaction, false);
-      }
-      if (check.outcome === 'REJECTED') return reject(check.failureCode);
-      referenced = found;
-    }
-
-    const operation = { entryId: crypto.randomUUID(), transactionId: transaction.id, now };
-    const effect = balanceEffect(request.kind, referenced?.kind ?? null);
-    const outcome: BalanceResult =
-      effect === 'DEBIT'
-        ? wallet.debit(request.money, operation, insufficientBalanceFailureCode(request.kind))
-        : effect === 'CREDIT'
-          ? wallet.credit(request.money, operation)
-          : { ok: true, balanceBefore: wallet.balance, balanceAfter: wallet.balance, entry: null };
-    if (!outcome.ok) return reject(outcome.failureCode);
-
-    transaction.markProcessed(outcome.balanceAfter, now, referenced?.id ?? null);
-    await repositories.transactions.add(transaction);
-    await emit(new WagerTransactionProcessed(context(), transactionEventData(transaction)));
-    if (outcome.entry !== null) {
-      await repositories.wallets.update(wallet, expectedVersion);
-      await repositories.ledger.append(outcome.entry);
-      // RN-28: só quando o saldo muda.
-      await emit(WalletBalanceChanged.from(wallet, outcome.entry, context()));
+      );
     }
     return resultOf(transaction, false);
   }
-}
-
-function hasReferenceRule(kind: ExternalKind): boolean {
-  return kind === 'WIN' || kind === 'REFUND' || kind === 'ROLLBACK';
 }
 
 async function findExisting(
@@ -338,17 +259,6 @@ function storedOf(transaction: WagerTransaction): StoredIdempotency {
     providerId: transaction.providerId,
     externalTransactionId: transaction.externalTransactionId,
     status: transaction.status,
-  };
-}
-
-function snapshotOf(transaction: WagerTransaction): ReferenceSnapshot {
-  return {
-    kind: transaction.kind,
-    status: transaction.status,
-    playerId: transaction.playerId,
-    walletId: transaction.walletId,
-    roundId: transaction.roundId,
-    money: transaction.money,
   };
 }
 
