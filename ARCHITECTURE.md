@@ -255,6 +255,25 @@ Os testes simulam indisponibilidade:
 
 Não há teste que derrube o PostgreSQL ou o SQS durante o processamento e prove a recuperação depois. O comportamento esperado é o da classificação de erros (ADR-0009, ADR-0010) e o da recuperação do outbox (ADR-0006), mas uma queda real no meio de uma transação não está coberta por teste.
 
+### Reinício da API
+
+A queda com retomada por outra instância está coberta para os três workers, com processos reais mortos por SIGKILL:
+- **publisher:** morre entre o ack do SQS e o COMMIT, e outra instância publica o evento (`test/concurrency/publisher-restart.test.ts`);
+- **resolvedor de pendências:** morre depois do COMMIT do 10º item, e três processos retomam a fila (`test/concurrency/pending-reference-restart.test.ts`);
+- **consumer:** morre depois do COMMIT e antes do ack, e as outras instâncias processam a redelivery sem duplicar o efeito (`test/concurrency/consumer-crash.test.ts`).
+
+A API não tem teste de reinício. Nenhum teste derruba uma instância HTTP no meio de uma requisição e confere a consistência final depois que ela volta.
+
+### Campos de `WalletBalanceChanged` (SPEC 11.2)
+
+O evento traz `walletId`, `walletVersion`, `transactionId`, `balanceBefore` e `balanceAfter` (`src/application/events.ts`, `WalletBalanceChangedData`). Ele não traz `direction` nem `money`, que constam do contrato de referência. A SPEC 11.2 exige só o `walletVersion` nos eventos de wallet.
+
+Acrescentar os campos muda um contrato público de evento. Pelo AGENTS.md §8, isso exige uma ADR antes do código, e nenhuma das duas coisas foi feita nesta entrega.
+
+### Construtor de `IntegrationEvent`
+
+O construtor da classe abstrata `IntegrationEvent` é `public` (`src/application/events.ts:24`), e deveria ser `protected`, para que só as subclasses o chamem. O risco é baixo: a classe é abstrata, e o TypeScript já recusa `new IntegrationEvent(...)`. Não foi corrigido nesta entrega.
+
 ## Decisões de projeto
 
 A tabela "Decisões de projeto" no início da [SPEC](docs/SPEC.md) registra os pontos que estavam em aberto ou incorretos quando o projeto começou e a correção adotada. Alguns exemplos:
