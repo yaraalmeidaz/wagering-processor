@@ -26,6 +26,7 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "3.1161.0",
     "@mikro-orm/core": "^7.2.9",
     "@mikro-orm/migrations": "^7.2.9",
     "@mikro-orm/postgresql": "^7.2.9",
