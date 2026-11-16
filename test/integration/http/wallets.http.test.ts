@@ -4,6 +4,7 @@ import type { Metrics } from '../../../src/observability/metrics';
 import { FakeClock } from '../../helpers/clock';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { type HttpApp, startHttpApp } from '../../helpers/http-app';
+import { ledgerInvariant } from '../../helpers/wallet-seed';
 
 // SPEC 13; ADR-0009; RN-03, RN-04, RN-37.
 describe('HTTP: wallets', () => {
@@ -11,6 +12,14 @@ describe('HTTP: wallets', () => {
   let http: HttpApp;
   /** Linhas escritas no LOG_SINK da aplicação. */
   const logLines: string[] = [];
+
+  /** Invariante final (SPEC 15.4; AGENTS.md §9): saldo gravado igual ao reconstruído pelo ledger. */
+  const expectLedgerConsistent = async (walletId: string, amount: string) =>
+    expect(await ledgerInvariant(db, walletId)).toEqual({
+      stored: amount,
+      reconstructed: amount,
+      consistent: true,
+    });
 
   const createWallet = (amount: string, playerId = crypto.randomUUID()) =>
     http.call('POST', '/wallets', {
@@ -77,6 +86,7 @@ describe('HTTP: wallets', () => {
         'WagerTransactionProcessed',
         'WalletBalanceChanged',
       ]);
+      await expectLedgerConsistent(walletId, '100.00');
     });
 
     test('saldo inicial zero não gera OPENING nem lançamento', async () => {
@@ -168,6 +178,7 @@ describe('HTTP: wallets', () => {
         '10.00',
       ]);
       expect(all.at(-1)?.['direction']).toBe('CREDIT');
+      await expectLedgerConsistent(walletId, '4.00');
     });
 
     test('lançamentos com o mesmo created_at: o desempate por id mantém a ordem e não perde itens', async () => {
@@ -215,6 +226,7 @@ describe('HTTP: wallets', () => {
         expect(ids).toHaveLength(4);
         expect(new Set(ids).size).toBe(4);
         expect(ids).toEqual([...ids].sort().reverse());
+        await expectLedgerConsistent(walletId, '4.00');
       } finally {
         await frozen.close();
       }
@@ -259,6 +271,7 @@ describe('HTTP: wallets', () => {
         consistent: true,
         checkedEntries: 2,
       });
+      await expectLedgerConsistent(walletId, '30.00');
     });
 
     test('divergência: logada, contada e sinalizada, sem correção silenciosa', async () => {

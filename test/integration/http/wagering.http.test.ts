@@ -3,11 +3,20 @@ import { payloadHash } from '../../../src/application/payload-hash';
 import { MikroOrmUnitOfWork } from '../../../src/infrastructure/persistence/mikro-orm-unit-of-work';
 import { createTestDatabase, type TestDatabase } from '../../helpers/database';
 import { type HttpApp, startHttpApp } from '../../helpers/http-app';
+import { ledgerInvariant } from '../../helpers/wallet-seed';
 
 // SPEC 9.2 e 13; ADR-0005, ADR-0009; RN-04, RN-19 a RN-23, RN-39.
 describe('HTTP: /wagering/transactions', () => {
   let db: TestDatabase;
   let http: HttpApp;
+
+  /** Invariante final (SPEC 15.4; AGENTS.md §9): saldo gravado igual ao reconstruído pelo ledger. */
+  const expectLedgerConsistent = async (walletId: string, amount: string) =>
+    expect(await ledgerInvariant(db, walletId)).toEqual({
+      stored: amount,
+      reconstructed: amount,
+      consistent: true,
+    });
 
   const newWallet = async (amount: string) => {
     const playerId = crypto.randomUUID();
@@ -71,6 +80,7 @@ describe('HTTP: /wagering/transactions', () => {
       idempotentReplay: false,
     });
     expect(typeof response.body['transactionId']).toBe('string');
+    await expectLedgerConsistent(wallet.walletId, '90.00');
   });
 
   test('replay: 200 com o mesmo corpo e idempotentReplay true (RN-20)', async () => {
@@ -82,6 +92,7 @@ describe('HTTP: /wagering/transactions', () => {
     const replay = await post(body);
     expect(replay.status).toBe(200);
     expect(replay.body).toEqual({ ...first.body, idempotentReplay: true });
+    await expectLedgerConsistent(wallet.walletId, '85.00');
   });
 
   test('mesma chave com payload divergente: 409 IDEMPOTENCY_PAYLOAD_MISMATCH (RN-21)', async () => {
@@ -93,6 +104,7 @@ describe('HTTP: /wagering/transactions', () => {
     expect(conflict.status).toBe(409);
     expect(conflict.body['code']).toBe('IDEMPOTENCY_PAYLOAD_MISMATCH');
     expect(conflict.body['failureCode']).toBeUndefined();
+    await expectLedgerConsistent(wallet.walletId, '90.00');
   });
 
   test('mesmo par com chave diferente: 409 IDEMPOTENCY_KEY_CONFLICT (RN-22)', async () => {
@@ -102,6 +114,7 @@ describe('HTTP: /wagering/transactions', () => {
     const conflict = await post(body, 'outra-chave');
     expect(conflict.status).toBe(409);
     expect(conflict.body['code']).toBe('IDEMPOTENCY_KEY_CONFLICT');
+    await expectLedgerConsistent(wallet.walletId, '90.00');
   });
 
   test('Idempotency-Key ausente: 400 MISSING_IDEMPOTENCY_KEY (RN-23)', async () => {
@@ -122,6 +135,7 @@ describe('HTTP: /wagering/transactions', () => {
     const replay = await post(body);
     expect(replay.status).toBe(202);
     expect(replay.body['idempotentReplay']).toBe(true);
+    await expectLedgerConsistent(wallet.walletId, '10.00');
   });
 
   test('rejeição de negócio: 422 com status REJECTED e failureCode (RN-19)', async () => {
@@ -133,6 +147,7 @@ describe('HTTP: /wagering/transactions', () => {
       failureCode: 'INSUFFICIENT_FUNDS',
       balance: { amount: '5.00', currency: 'BRL' },
     });
+    await expectLedgerConsistent(wallet.walletId, '5.00');
   });
 
   test.each([
@@ -190,6 +205,7 @@ describe('HTTP: /wagering/transactions', () => {
       release();
       await holder;
     }
+    await expectLedgerConsistent(wallet.walletId, '10.00');
   }, 15_000);
 
   test('replay de FAILED: POST 500 TRANSACTION_FAILED sem failureCode e sem Retry-After; GET 200 com status FAILED (SPEC 9.2; ADR-0005)', async () => {
@@ -253,6 +269,7 @@ describe('HTTP: /wagering/transactions', () => {
       [transactionId],
     );
     expect(entries[0]?.['n']).toBe(0);
+    await expectLedgerConsistent(wallet.walletId, '10.00');
   });
 
   describe('consultas', () => {
@@ -280,6 +297,7 @@ describe('HTTP: /wagering/transactions', () => {
       );
       expect(byExternal.status).toBe(200);
       expect(byExternal.body['transactionId']).toBe(transactionId);
+      await expectLedgerConsistent(wallet.walletId, '90.00');
     });
 
     test('transação inexistente: 404 TRANSACTION_NOT_FOUND nas duas consultas', async () => {
