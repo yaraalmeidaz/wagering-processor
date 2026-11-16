@@ -6,6 +6,8 @@ set -euo pipefail
 INPUT_QUEUE="wager-transactions.fifo"
 DLQ_QUEUE="wager-transactions-dlq.fifo"
 EVENTS_QUEUE="wager-events.fifo"
+# Precisa ser igual a MAX_RECEIVE_COUNT de src/infrastructure/messaging/queues.ts, assim como
+# os nomes das filas. test/unit/messaging/queue-setup.test.ts compara os dois.
 MAX_RECEIVE_COUNT=5 # RN-35
 
 awslocal sqs create-queue --queue-name "$DLQ_QUEUE" --attributes FifoQueue=true >/dev/null
