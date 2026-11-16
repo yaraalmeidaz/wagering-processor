@@ -1,5 +1,9 @@
 import { ConnectionException, DriverException } from '@mikro-orm/core';
-import { TransientFailureError, UniqueViolationError } from '../../application/errors';
+import {
+  PermanentDataError,
+  TransientFailureError,
+  UniqueViolationError,
+} from '../../application/errors';
 
 /** SQLSTATEs transitórios da SPEC 5.9, mais o statement_timeout (57014). */
 const TRANSIENT_STATES = new Set(['55P03', '40P01', '40001', '57014']);
@@ -29,6 +33,10 @@ export function translateDriverError(error: unknown): unknown {
   }
   if (state !== null && TRANSIENT_STATES.has(state)) {
     return new TransientFailureError(`falha transitória ${state}`, state, { cause: error });
+  }
+  // Classe 22 (dado inválido) e 23 (restrição de integridade): permanentes (ADR-0007).
+  if (state !== null && (state.startsWith('22') || state.startsWith('23'))) {
+    return new PermanentDataError(`dado recusado pelo banco ${state}`, state, { cause: error });
   }
   return error;
 }

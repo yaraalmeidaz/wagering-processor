@@ -44,6 +44,19 @@ export class TransientFailureError extends ApplicationError {
   }
 }
 
+/**
+ * Dado que o banco recusa ou que o domínio não reidrata: SQLSTATE das classes 22 e 23,
+ * exceto 23505. Repetir não muda o resultado. No resolvedor vira FAILED (RN-41; ADR-0007).
+ */
+export class PermanentDataError extends ApplicationError {
+  readonly sqlState: string | null;
+
+  constructor(message: string, sqlState: string | null, options?: { cause?: unknown }) {
+    super(message, options);
+    this.sqlState = sqlState;
+  }
+}
+
 /** Violação de unicidade (23505), com o nome da constraint, traduzida pela persistência. */
 export class UniqueViolationError extends ApplicationError {
   readonly constraint: string | null;

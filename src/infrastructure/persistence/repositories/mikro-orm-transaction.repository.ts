@@ -102,6 +102,17 @@ export class MikroOrmTransactionRepository implements TransactionRepository {
     return affected === 1;
   }
 
+  async markPendingReferenceFailed(id: string, now: Date): Promise<boolean> {
+    this.#scope.assertActive();
+    // A transição PENDING_REFERENCE -> FAILED da RN-25 fica no WHERE; failure_code segue nulo (RN-40).
+    const affected = await this.#em.nativeUpdate(
+      WagerTransactionOrmEntity,
+      { id, status: 'PENDING_REFERENCE' },
+      { status: 'FAILED', processedAt: now },
+    );
+    return affected === 1;
+  }
+
   async add(transaction: WagerTransaction): Promise<void> {
     this.#scope.assertActive();
     await this.#em.insert(WagerTransactionOrmEntity, transactionToRow(transaction));
