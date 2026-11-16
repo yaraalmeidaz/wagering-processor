@@ -2,7 +2,8 @@ import 'reflect-metadata';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import type { INestApplication, LoggerService } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
-import { AppModule } from '../../src/app.module';
+import { AppModule, type AppSqsOptions } from '../../src/app.module';
+import { readinessSqs } from './sqs';
 
 export interface HttpResponse {
   readonly status: number;
@@ -45,9 +46,12 @@ const logger = new CollectingLogger();
 export async function startHttpApp(
   orm: MikroORM,
   customize: (builder: TestingModuleBuilder) => TestingModuleBuilder = (builder) => builder,
+  sqs?: AppSqsOptions,
 ): Promise<HttpApp> {
   const moduleRef = await customize(
-    Test.createTestingModule({ imports: [AppModule.forRoot({ orm })] }),
+    Test.createTestingModule({
+      imports: [AppModule.forRoot({ orm, sqs: sqs ?? (await readinessSqs()) })],
+    }),
   ).compile();
   const app = moduleRef.createNestApplication();
   app.useLogger(logger);

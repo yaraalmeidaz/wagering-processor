@@ -21,11 +21,11 @@ export class HealthController {
     return { status: 'ok' };
   }
 
-  /** PostgreSQL agora. O SQS entra na verificação com a mensageria (Fase 6). */
+  /** PostgreSQL e SQS (enunciado §9; ADR-0010). */
   @Get('ready')
   async ready(@Res({ passthrough: true }) response: StatusResponse) {
     const checks = await this.#readiness.check();
-    const ok = checks.postgres === 'ok';
+    const ok = Object.values(checks).every((status) => status === 'ok');
     response.status(ok ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
     return { status: ok ? 'ok' : 'unavailable', checks };
   }

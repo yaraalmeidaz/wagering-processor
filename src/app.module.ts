@@ -1,3 +1,4 @@
+import type { SQSClient } from '@aws-sdk/client-sqs';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
@@ -9,8 +10,10 @@ import { GetTransaction } from './application/use-cases/get-transaction';
 import { ProcessWagerTransaction } from './application/use-cases/process-wager-transaction';
 import { ReconcileWallet } from './application/use-cases/reconcile-wallet';
 import { GetLedger, GetWallet } from './application/use-cases/wallet-queries';
+import { SqsReadinessCheck } from './infrastructure/messaging/sqs-readiness-check';
 import { MikroOrmUnitOfWork } from './infrastructure/persistence/mikro-orm-unit-of-work';
 import { PostgresReadinessCheck } from './infrastructure/persistence/postgres-readiness-check';
+import { CompositeReadinessCheck } from './infrastructure/readiness';
 import { SystemClock } from './infrastructure/system-clock';
 import { AuthGuard } from './interfaces/http/auth.guard';
 import { HealthController } from './interfaces/http/health.controller';
@@ -29,8 +32,15 @@ import { type LogSink, stdoutLogSink } from './observability/log-sink';
 import { LoggingReconciliationMonitor } from './observability/logging-reconciliation-monitor';
 import { InMemoryMetrics, type Metrics } from './observability/metrics';
 
+/** Cliente SQS e fila de entrada, para a readiness (ADR-0010). */
+export interface AppSqsOptions {
+  readonly client: SQSClient;
+  readonly inputQueueUrl: string;
+}
+
 export interface AppModuleOptions {
   readonly orm: MikroORM;
+  readonly sqs: AppSqsOptions;
 }
 
 /** Raiz de composição: liga as portas às implementações (SPEC 2). */
@@ -46,7 +56,14 @@ export class AppModule {
         { provide: UNIT_OF_WORK, useFactory: () => new MikroOrmUnitOfWork(options.orm.em) },
         { provide: CLOCK, useValue: new SystemClock() },
         { provide: METRICS, useValue: new InMemoryMetrics() },
-        { provide: READINESS_CHECK, useFactory: () => new PostgresReadinessCheck(options.orm) },
+        {
+          provide: READINESS_CHECK,
+          useFactory: () =>
+            new CompositeReadinessCheck({
+              postgres: new PostgresReadinessCheck(options.orm),
+              sqs: new SqsReadinessCheck(options.sqs.client, options.sqs.inputQueueUrl),
+            }),
+        },
         { provide: LOG_SINK, useValue: stdoutLogSink },
         {
           provide: RECONCILIATION_MONITOR,

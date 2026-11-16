@@ -17,7 +17,9 @@
     "test": "bun test ./test/unit",
     "test:integration": "bun test --pass-with-no-tests ./test/integration",
     "test:concurrency": "bun test --pass-with-no-tests ./test/concurrency",
-    "test:load": "bun test --pass-with-no-tests ./test/load"
+    "test:load": "bun test --pass-with-no-tests ./test/load",
+    "worker:consumer": "bun src/infrastructure/workers/sqs-consumer.main.ts",
+    "worker:publisher": "bun src/infrastructure/workers/outbox-publisher.main.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
