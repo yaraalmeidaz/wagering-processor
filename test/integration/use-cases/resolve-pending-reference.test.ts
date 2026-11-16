@@ -381,6 +381,33 @@ describe('ResolvePendingReference (SPEC 8.2)', () => {
       expect(await ledgerXmin(pending.id)).toEqual([]);
     });
 
+    test('erro permanente do banco aborta a tentativa: FAILED em transação nova, sem evento nem crédito (RN-41; ADR-0007)', async () => {
+      const { processor, resolver } = setup();
+      const wallet = await seedWallet(uow, '100.00');
+      const pending = await pendingRollback(processor, wallet, '30.00');
+      await processor.execute(
+        betInput(wallet, '30.00', { externalTransactionId: pending.betExternalId }),
+      );
+      // Lançamento já gravado para a pendência: o append do resolvedor recebe o 23505 de
+      // UNIQUE (transaction_id, wallet_id), que não é o índice de reversão, e a transação aborta.
+      await db.execute(
+        `INSERT INTO wallet_ledger_entries
+           (id, wallet_id, transaction_id, direction, amount, balance_before, balance_after, created_at)
+         VALUES (?, ?, ?, 'CREDIT', 1.00, 0.00, 1.00, now())`,
+        [crypto.randomUUID(), wallet.id, pending.id],
+      );
+      const before = await outbox(wallet.id);
+
+      const result = await resolver.resolve(pending);
+
+      expect(result.outcome).toBe('FAILED');
+      const failed = await row(pending.id);
+      expect(failed.status).toBe('FAILED');
+      expect(failed.failureCode).toBeNull();
+      expect(await outbox(wallet.id)).toEqual(before);
+      expect((await walletRow(wallet.id)).balance).toBe('70.00');
+    });
+
     test('linha que não reidrata é erro permanente: FAILED sem failureCode e sem evento (RN-40, RN-41)', async () => {
       const { processor, resolver } = setup();
       const wallet = await seedWallet(uow, '100.00');
